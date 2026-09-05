@@ -289,6 +289,7 @@ function renderLoginPage() {
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script>
       const { createApp } = Vue;
+      const defaultRepoAddress = "https://github.com/companion-inc/feynman";
 
       createApp({
         data() {
@@ -296,7 +297,7 @@ function renderLoginPage() {
             error: "",
             loading: false,
             password: "",
-            repoAddress: "",
+            repoAddress: defaultRepoAddress,
             repoLoading: false,
             user: null,
             username: "",
@@ -346,7 +347,7 @@ function renderLoginPage() {
             this.error = "";
             this.loading = false;
             this.password = "";
-            this.repoAddress = "";
+            this.repoAddress = defaultRepoAddress;
             this.repoLoading = false;
             this.user = null;
             this.username = "";
@@ -362,6 +363,7 @@ function renderLoginPage() {
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
           .join(" ");
       }
+
     </script>
   </body>
 </html>`;
