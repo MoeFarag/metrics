@@ -158,9 +158,32 @@ function renderLoginPage() {
         right: 0;
         top: 50%;
         transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        gap: 10px;
         color: #31394a;
         font-size: 14px;
         font-weight: 700;
+      }
+
+      .user-separator {
+        width: 1px;
+        height: 18px;
+        background: #c9d0dc;
+      }
+
+      .logout-button {
+        min-height: 32px;
+        border: 1px solid #c9d0dc;
+        background: #ffffff;
+        color: #31394a;
+        padding: 0 10px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .logout-button:hover {
+        background: #f1f3f7;
       }
 
       .dashboard-body {
@@ -227,7 +250,11 @@ function renderLoginPage() {
             >
             <button :disabled="repoLoading" type="submit">Go</button>
           </form>
-          <div class="user-label">{{ displayUserName }}</div>
+          <div class="user-label">
+            <span>{{ displayUserName }}</span>
+            <span class="user-separator" aria-hidden="true"></span>
+            <button class="logout-button" type="button" @click="logout">Log out</button>
+          </div>
         </header>
 
         <section class="dashboard-body">
@@ -314,6 +341,15 @@ function renderLoginPage() {
           },
           loadRepoMetrics() {
             this.repoLoading = true;
+          },
+          logout() {
+            this.error = "";
+            this.loading = false;
+            this.password = "";
+            this.repoAddress = "";
+            this.repoLoading = false;
+            this.user = null;
+            this.username = "";
           },
         },
       }).mount("#app");
