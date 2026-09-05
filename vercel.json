@@ -1,0 +1,16 @@
+{
+  "functions": {
+    "api/github/[...path].js": {
+      "runtime": "nodejs22.x"
+    },
+    "api/webhooks/github.js": {
+      "runtime": "nodejs22.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/github/:path*",
+      "destination": "/api/github/[...path].js"
+    }
+  ]
+}
