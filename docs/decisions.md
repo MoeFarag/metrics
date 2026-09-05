@@ -1,5 +1,39 @@
 # Design Decisions
 
+## 2026-09-05: Product Boundary
+
+Decision: this project measures DORA metrics in general, not GitHub metrics specifically.
+
+Why:
+
+- GitHub is only one possible source of delivery, workflow, and change events.
+- DORA reporting will likely need data from multiple systems, including code hosting, CI/CD, deployment, incident, ticketing, and manual sources.
+- The backend should own integration details, credentials, webhook handling, normalization, and query logic. The frontend should consume backend views instead of talking directly to source systems.
+
+Current implementation stance:
+
+- Keep the existing GitHub wrapper as the first source connector.
+- Serve the prototype frontend from the same server for now.
+- Use server-rendered HTML on first load, then let Vue handle richer frontend interactions after hydration/client startup.
+- Revisit hosting and frontend/backend deployment boundaries after the prototype is approved for further development.
+
+## 2026-09-05: Prototype Authentication
+
+Decision: use a simple username/password login gate with three environment-configured roles: admin, manager, and executive.
+
+Why:
+
+- The prototype needs a fast access gate before the full product authorization model is known.
+- Role-specific credentials let the dashboard shape start reflecting different readers without committing to a permanent identity provider.
+- Environment variables keep credentials out of source control.
+
+Current implementation stance:
+
+- Store `AUTH_ADMIN_*`, `AUTH_MANAGER_*`, and `AUTH_EXECUTIVE_*` values in the runtime environment.
+- Validate passwords through a separate hash service.
+- Implement hashing as base64 only for the quick prototype.
+- Replace the hash service with a proper password hashing strategy and likely a real identity provider if the prototype is approved for further development.
+
 ## 2026-09-05: Event Storage
 
 Decision: use SQLite as the first persistence layer for webhook event history and subscription state.

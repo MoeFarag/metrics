@@ -23,6 +23,18 @@ function readConfig(env = process.env) {
   };
 }
 
+function readAuthConfig(env = process.env) {
+  const roles = ["admin", "manager", "executive"];
+
+  return {
+    roles: roles.map((role) => ({
+      role,
+      username: env[`AUTH_${role.toUpperCase()}_USERNAME`] || "",
+      passwordHash: env[`AUTH_${role.toUpperCase()}_PASSWORD_HASH`] || "",
+    })),
+  };
+}
+
 function parseCsv(value) {
   return String(value || "")
     .split(",")
@@ -30,4 +42,4 @@ function parseCsv(value) {
     .filter(Boolean);
 }
 
-module.exports = { readConfig, parseCsv };
+module.exports = { readAuthConfig, readConfig, parseCsv };
