@@ -57,6 +57,23 @@ class GitHubMetricsWrapper {
     );
   }
 
+  async getWorkflowRunAttempt(runId, attemptNumber) {
+    return this.requestWithMeta(
+      `/repos/${this.repoPath}/actions/runs/${encodeURIComponent(runId)}/attempts/${encodeURIComponent(
+        attemptNumber
+      )}`
+    );
+  }
+
+  async listJobsForRunAttempt(runId, attemptNumber, params = {}) {
+    return this.requestAllPages(
+      `/repos/${this.repoPath}/actions/runs/${encodeURIComponent(runId)}/attempts/${encodeURIComponent(
+        attemptNumber
+      )}/jobs`,
+      params
+    );
+  }
+
   async listArtifacts(params = {}) {
     return this.request(`/repos/${this.repoPath}/actions/artifacts`, params);
   }
