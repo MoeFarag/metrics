@@ -411,7 +411,7 @@ function renderLoginPage() {
       .metric-visual {
         position: relative;
         width: 100%;
-        min-height: 128px;
+        min-height: 154px;
         border-radius: 6px;
         background:
           linear-gradient(to right, #e6ebf2 1px, transparent 1px),
@@ -423,17 +423,17 @@ function renderLoginPage() {
 
       .metric-visual svg {
         width: 100%;
-        height: 128px;
+        height: 154px;
         display: block;
         overflow: visible;
       }
 
       .manager-metric-card .metric-visual {
-        min-height: 256px;
+        min-height: 307px;
       }
 
       .manager-metric-card .metric-visual svg {
-        height: 256px;
+        height: 307px;
       }
 
       .executive-report {
@@ -1326,7 +1326,7 @@ function renderLoginPage() {
         const releases = Array.isArray(metric.releases) ? metric.releases : [];
         if (releases.length) {
           const ticks = releases.slice(-16).map((release, index, rows) => {
-            const x = 16 + (index * 76) / Math.max(rows.length - 1, 1);
+            const x = 16 + (index * 96) / Math.max(rows.length - 1, 1);
             return '<line class="chart-point" x1="' + x + '" y1="16" x2="' + x + '" y2="48" stroke="#2f7f67" stroke-width="3"><title>' + escapeHtml(release.tag_name || release.title || "Release") + '</title></line>';
           }).join("");
           return svg(ticks, { xLabel: "Weeks", yLabel: "Releases" });
@@ -1349,7 +1349,7 @@ function renderLoginPage() {
         const releases = Array.isArray(metric.releases) ? metric.releases : [];
         if (releases.length) {
           return svg(releases.slice(-18).map((release, index, rows) => {
-            const x = 16 + (index * 76) / Math.max(rows.length - 1, 1);
+            const x = 16 + (index * 96) / Math.max(rows.length - 1, 1);
             const color = release.failed ? "#a3332a" : release.signals?.length ? "#2f7f67" : "#98a2b3";
             return '<circle class="chart-point" cx="' + x + '" cy="30" r="4" fill="' + color + '"><title>' + escapeHtml((release.tag_name || "Release") + (release.failed ? ": failure signal" : ": no failure signal")) + '</title></circle>';
           }).join(""), { xLabel: "Releases", yLabel: "Failure signal" });
@@ -1363,13 +1363,13 @@ function renderLoginPage() {
         if (!values.length) return renderGenericVisual(metric);
         const max = Math.max(...values, 1);
         const bars = values.map((value, index) => {
-          const width = Math.max(8, (value / max) * 70);
+          const width = Math.max(8, (value / max) * 92);
           const y = 18 + index * 12;
           const label = "P" + [50, 75, 90][index];
           return '<text class="chart-tick-label" x="3" y="' + (y + 1.5) + '">' + label + '</text>' +
             '<line class="chart-bar" x1="18" y1="' + y + '" x2="' + (18 + width) + '" y2="' + y + '" stroke="#2f7f67" stroke-width="6" stroke-linecap="round"><title>' + label + ': ' + formatMetricNumber(value, "lines") + '</title></line>';
         }).join("");
-        const threshold = metric.headline?.threshold_lines ? '<line x1="88" y1="12" x2="88" y2="52" stroke="#a3332a" stroke-width="2" stroke-dasharray="3 3"><title>Large change threshold: ' + formatMetricNumber(metric.headline.threshold_lines, "lines") + '</title></line>' : "";
+        const threshold = metric.headline?.threshold_lines ? '<line x1="108" y1="12" x2="108" y2="52" stroke="#a3332a" stroke-width="2" stroke-dasharray="3 3"><title>Large change threshold: ' + formatMetricNumber(metric.headline.threshold_lines, "lines") + '</title></line>' : "";
         return svg(bars + threshold, { xLabel: "Changed lines", yLabel: "Percentile" });
       }
 
@@ -1379,7 +1379,7 @@ function renderLoginPage() {
         const max = Math.max(...entries, 1);
         return svg(entries.map((value, index) => {
           const height = Math.max(4, (value / max) * 34);
-          const x = 18 + index * 18;
+          const x = 26 + index * 22;
           const color = index >= 3 ? "#a3332a" : "#2f7f67";
           const label = ["0", "1", "2", "3+"][index];
           return '<rect class="chart-bar" x="' + x + '" y="' + (50 - height) + '" width="12" height="' + height + '" rx="2" fill="' + color + '"><title>' + label + ' round trips: ' + value + '</title></rect>' +
@@ -1391,8 +1391,8 @@ function renderLoginPage() {
         const red = metric.headline?.time_to_red_p50_seconds;
         const green = metric.headline?.time_to_green_p50_seconds;
         const max = Math.max(Number(red) || 1, Number(green) || 1);
-        const redWidth = Math.max(8, ((Number(red) || 0) / max) * 66);
-        const greenWidth = Math.max(8, ((Number(green) || 0) / max) * 66);
+        const redWidth = Math.max(8, ((Number(red) || 0) / max) * 86);
+        const greenWidth = Math.max(8, ((Number(green) || 0) / max) * 86);
         return svg(
           '<text class="chart-tick-label" x="3" y="22">Red</text>' +
           '<rect class="chart-bar" x="24" y="16" width="' + redWidth + '" height="10" rx="3" fill="#a3332a"><title>Median time to red: ' + formatMetricNumber(red, "seconds") + '</title></rect>' +
@@ -1405,8 +1405,8 @@ function renderLoginPage() {
       function renderCiReliability(metric) {
         const pass = Number(metric.headline?.first_attempt_pass_rate_pct) || 0;
         const rerun = Number(metric.headline?.rerun_rate_pct) || 0;
-        const passWidth = Math.max(4, Math.min(68, pass * 0.68));
-        const rerunWidth = Math.max(4, Math.min(68, rerun * 0.68));
+        const passWidth = Math.max(4, Math.min(88, pass * 0.88));
+        const rerunWidth = Math.max(4, Math.min(88, rerun * 0.88));
         return svg(
           '<text class="chart-tick-label" x="3" y="22">Pass</text>' +
           '<rect class="chart-bar" x="24" y="14" width="' + passWidth + '" height="12" rx="3" fill="#2f7f67"><title>First-attempt pass rate: ' + formatMetricNumber(pass, "percent") + '</title></rect>' +
@@ -1421,17 +1421,17 @@ function renderLoginPage() {
       }
 
       function svg(inner, labels = {}) {
-        return '<svg viewBox="0 0 100 62" preserveAspectRatio="xMidYMid meet" role="img">' +
+        return '<svg viewBox="0 0 120 62" preserveAspectRatio="xMidYMid meet" role="img">' +
           chartFrame(labels.xLabel || "X axis", labels.yLabel || "Y axis") +
           inner +
           '</svg>';
       }
 
       function chartFrame(xLabel, yLabel) {
-        return '<line class="chart-axis" x1="14" y1="52" x2="94" y2="52"/>' +
+        return '<line class="chart-axis" x1="14" y1="52" x2="114" y2="52"/>' +
           '<line class="chart-axis" x1="14" y1="10" x2="14" y2="52"/>' +
-          '<line class="chart-grid" x1="14" y1="31" x2="94" y2="31"/>' +
-          '<text class="chart-label" x="54" y="61" text-anchor="middle">' + escapeHtml(xLabel) + '</text>' +
+          '<line class="chart-grid" x1="14" y1="31" x2="114" y2="31"/>' +
+          '<text class="chart-label" x="64" y="61" text-anchor="middle">' + escapeHtml(xLabel) + '</text>' +
           '<text class="chart-label" x="2" y="31" transform="rotate(-90 2 31)" text-anchor="middle">' + escapeHtml(yLabel) + '</text>';
       }
 
@@ -1440,7 +1440,7 @@ function renderLoginPage() {
         const max = Math.max(...points, 1);
         const min = Math.min(...points, 0);
         const span = Math.max(max - min, 1);
-        const step = 76 / Math.max(points.length - 1, 1);
+        const step = 96 / Math.max(points.length - 1, 1);
         const path = points.map((value, index) => {
           const x = 16 + index * step;
           const y = 50 - ((value - min) / span) * 34;

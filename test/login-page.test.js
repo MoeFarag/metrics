@@ -42,7 +42,7 @@ test("manager and executive views use separate metric layouts", () => {
   assert.match(html, /manager-metric-card/);
   assert.match(html, /min-height: 440px;/);
   assert.match(html, /font-size: 60px;/);
-  assert.match(html, /height: 256px;/);
+  assert.match(html, /height: 307px;/);
   assert.match(html, /executive-metric-grid/);
   assert.match(html, /executive-metric-card/);
   assert.match(html, /class="executive-report"/);
@@ -70,7 +70,7 @@ test("metric labels are human readable and charts expose hover titles", () => {
   assert.match(html, /Insufficient data/);
   assert.match(html, /Required checks use observed Actions jobs/);
   assert.match(html, /<title>/);
-  assert.match(html, /height: 128px;/);
+  assert.match(html, /height: 154px;/);
   assert.doesNotMatch(html, /<strong>Metric<\/strong>/);
 });
 
@@ -78,6 +78,7 @@ test("metric charts render axes labels and hoverable points", () => {
   const html = renderLoginPage();
 
   assert.match(html, /function chartFrame/);
+  assert.match(html, /viewBox="0 0 120 62"/);
   assert.match(html, /preserveAspectRatio="xMidYMid meet"/);
   assert.doesNotMatch(html, /preserveAspectRatio="none"/);
   assert.match(html, /class="chart-axis"/);
