@@ -681,13 +681,28 @@ function renderLoginPage() {
           },
           metricValue(metric) {
             if (metric.headline?.value !== undefined) {
-              return metric.headline.value;
+              return formatMetricNumber(metric.headline.value, metric.headline.unit);
             }
             if (metric.headline?.value_hours !== undefined) {
-              return Math.round(metric.headline.value_hours) + "h";
+              return formatMetricNumber(metric.headline.value_hours, "hours");
             }
             if (metric.headline?.value_pct !== undefined) {
-              return Math.round(metric.headline.value_pct) + "%";
+              return formatMetricNumber(metric.headline.value_pct, "percent");
+            }
+            if (metric.headline?.large_change_share_pct !== undefined) {
+              return formatMetricNumber(metric.headline.large_change_share_pct, "percent");
+            }
+            if (metric.headline?.p50 !== undefined) {
+              return formatMetricNumber(metric.headline.p50, metric.headline.unit);
+            }
+            if (metric.headline?.p50_hours !== undefined) {
+              return formatMetricNumber(metric.headline.p50_hours, "hours");
+            }
+            if (metric.headline?.time_to_green_p50_seconds !== undefined) {
+              return formatMetricNumber(metric.headline.time_to_green_p50_seconds, "seconds");
+            }
+            if (metric.headline?.first_attempt_pass_rate_pct !== undefined) {
+              return formatMetricNumber(metric.headline.first_attempt_pass_rate_pct, "percent");
             }
             return "Pending";
           },
@@ -730,6 +745,24 @@ function renderLoginPage() {
           month: "short",
           day: "numeric",
         }).format(new Date(value));
+      }
+
+      function formatMetricNumber(value, unit) {
+        if (value === null || value === undefined || Number.isNaN(Number(value))) {
+          return "Pending";
+        }
+
+        const number = Number(value);
+        if (unit === "percent") {
+          return Math.round(number) + "%";
+        }
+        if (unit === "hours") {
+          return Math.round(number) + "h";
+        }
+        if (unit === "seconds") {
+          return Math.round(number / 60) + "m";
+        }
+        return Number.isInteger(number) ? String(number) : number.toFixed(1);
       }
     </script>
   </body>

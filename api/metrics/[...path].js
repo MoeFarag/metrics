@@ -241,8 +241,11 @@ function buildNote(result) {
   if (Array.isArray(result.low_confidence_reasons) && result.low_confidence_reasons.length) {
     return result.low_confidence_reasons.join(", ");
   }
+  if (result.metric === "review_round_trips" && result.confidence?.basis) {
+    return result.confidence.basis;
+  }
   if (Array.isArray(result.caveats) && result.caveats.length) {
-    return result.caveats.join(", ");
+    return result.caveats.slice(0, 2).join(", ");
   }
   if (result.state === "no_releases") {
     return "No releases detected in the selected window, which impacts release-based metrics.";
