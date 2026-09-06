@@ -1,4 +1,4 @@
-# DORA Metrics Prototype
+# Metrics Dashboard Prototype
 
 Prototype app for measuring DORA metrics across delivery systems. GitHub is one source connector, not the product boundary.
 

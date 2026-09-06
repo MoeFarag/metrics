@@ -4,7 +4,7 @@ function renderLoginPage() {
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>DORA Metrics Prototype</title>
+    <title>Metrics Dashboard Prototype</title>
     <style>
       :root {
         color-scheme: light;
@@ -182,7 +182,7 @@ function renderLoginPage() {
       .content {
         width: min(1180px, 100%);
         margin: 0 auto;
-        padding: 22px clamp(16px, 3vw, 32px) 36px;
+        padding: 22px clamp(16px, 3vw, 32px) 190px;
       }
 
       .summary-band {
@@ -349,9 +349,19 @@ function renderLoginPage() {
       }
 
       .limitations {
-        margin-top: 18px;
-        border-top: 1px solid #d8dee8;
-        padding-top: 16px;
+        position: fixed;
+        right: clamp(16px, 3vw, 32px);
+        bottom: 0;
+        left: clamp(16px, 3vw, 32px);
+        z-index: 20;
+        margin: 0 auto;
+        width: min(1180px, calc(100% - clamp(16px, 3vw, 32px) * 2));
+        border: 1px solid #d8dee8;
+        border-bottom: 0;
+        border-radius: 8px 8px 0 0;
+        background: #ffffff;
+        box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.1);
+        padding: 12px 16px;
       }
 
       .limitations summary {
@@ -362,7 +372,7 @@ function renderLoginPage() {
       }
 
       .limitations ul {
-        margin: 12px 0 0;
+        margin: 10px 0 0;
         padding-left: 20px;
         color: #475467;
       }
@@ -518,7 +528,7 @@ function renderLoginPage() {
 
       <section v-else class="login-screen">
         <form class="login-panel" @submit.prevent="login">
-          <h1>DORA Metrics</h1>
+          <h1>Metrics Dashboard Prototype</h1>
           <p class="muted">Prototype access gate</p>
 
           <label>
@@ -587,7 +597,7 @@ function renderLoginPage() {
             return this.canSwitchViews ? this.view : "manager";
           },
           currentTitle() {
-            return this.repoSummary?.repo?.full_name || "Metrics prototype";
+            return this.repoSummary?.repo?.full_name || "Metrics Dashboard Prototype";
           },
           currentSubtitle() {
             if (!this.repoSummary?.repo) {
