@@ -289,7 +289,7 @@ function renderLoginPage() {
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script>
       const { createApp } = Vue;
-      const defaultRepoAddress = "https://github.com/companion-inc/feynman";
+      const defaultRepoAddress = "https://github.com/advaitpaliwal/feynman";
 
       createApp({
         data() {
