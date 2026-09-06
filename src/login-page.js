@@ -409,6 +409,7 @@ function renderLoginPage() {
       }
 
       .metric-visual {
+        position: relative;
         width: 100%;
         min-height: 128px;
         border-radius: 6px;
@@ -467,6 +468,22 @@ function renderLoginPage() {
       .chart-point,
       .chart-bar {
         cursor: help;
+      }
+
+      .chart-tooltip {
+        position: fixed;
+        z-index: 60;
+        max-width: min(280px, calc(100vw - 24px));
+        border: 1px solid #c9d0dc;
+        border-radius: 6px;
+        background: #ffffff;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+        color: #303747;
+        padding: 8px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.35;
+        pointer-events: none;
       }
 
       .chart-axis {
@@ -780,7 +797,14 @@ function renderLoginPage() {
                   <div class="status-row">
                     <span class="chip">{{ confidenceLabel(metric) }}</span>
                   </div>
-                  <div class="metric-visual" v-html="metricVisual(metric)"></div>
+                  <div
+                    class="metric-visual"
+                    v-html="metricVisual(metric)"
+                    @click="showChartTooltip($event, true)"
+                    @pointerleave="hideChartTooltip(false)"
+                    @pointermove="moveChartTooltip"
+                    @pointerover="showChartTooltip($event, false)"
+                  ></div>
                   <p class="muted">{{ metricNote(metric) }}</p>
                 </div>
               </div>
@@ -837,6 +861,9 @@ function renderLoginPage() {
               <li v-for="item in modal.items" :key="item">{{ item }}</li>
             </ul>
           </section>
+        </div>
+        <div v-if="chartTooltip.visible" class="chart-tooltip" :style="chartTooltipStyle" role="status">
+          {{ chartTooltip.text }}
         </div>
       </section>
 
@@ -927,6 +954,13 @@ function renderLoginPage() {
             limitations: fallbackLimitations,
             metrics: [],
             modal: null,
+            chartTooltip: {
+              locked: false,
+              text: "",
+              visible: false,
+              x: 0,
+              y: 0,
+            },
             password: "",
             repoAddress: defaultRepoAddress,
             repoError: "",
@@ -990,6 +1024,12 @@ function renderLoginPage() {
           lowRateLimit() {
             const remaining = this.repoSummary?.rateLimit?.remaining;
             return Number.isFinite(remaining) && remaining < 500;
+          },
+          chartTooltipStyle() {
+            return {
+              left: this.chartTooltip.x + "px",
+              top: this.chartTooltip.y + "px",
+            };
           },
         },
         methods: {
@@ -1070,6 +1110,7 @@ function renderLoginPage() {
             this.repoSummary = null;
             this.metrics = [];
             this.modal = null;
+            this.hideChartTooltip(true);
             this.user = null;
             this.username = "";
           },
@@ -1140,7 +1181,51 @@ function renderLoginPage() {
           metricReport(metric) {
             return metricPlan(metric);
           },
+          showChartTooltip(event, lock) {
+            const text = chartTooltipText(event.target);
+            if (!text) {
+              if (lock) this.hideChartTooltip(true);
+              return;
+            }
+
+            this.chartTooltip = {
+              locked: Boolean(lock),
+              text,
+              visible: true,
+              ...tooltipPosition(event),
+            };
+          },
+          moveChartTooltip(event) {
+            if (!this.chartTooltip.visible || this.chartTooltip.locked) {
+              return;
+            }
+
+            const text = chartTooltipText(event.target);
+            if (!text) {
+              return;
+            }
+
+            this.chartTooltip = {
+              ...this.chartTooltip,
+              text,
+              ...tooltipPosition(event),
+            };
+          },
+          hideChartTooltip(force = false) {
+            if (this.chartTooltip.locked && !force) {
+              return;
+            }
+
+            this.chartTooltip = {
+              locked: false,
+              text: "",
+              visible: false,
+              x: 0,
+              y: 0,
+            };
+          },
           openDetails(metric) {
+            this.hideChartTooltip(true);
             this.modal = {
               title: this.metricRef(metric) + " - " + metric.name,
               subtitle: metric.question || "Metric details",
@@ -1148,6 +1233,7 @@ function renderLoginPage() {
             };
           },
           openInfo(metric) {
+            this.hideChartTooltip(true);
             const plan = metricPlan(metric);
             this.modal = {
               title: this.metricRef(metric) + " - " + metric.name + " definition",
@@ -1160,6 +1246,7 @@ function renderLoginPage() {
             };
           },
           openBand(metric) {
+            this.hideChartTooltip(true);
             this.modal = {
               title: this.metricRef(metric) + " band: " + this.bandLabel(metric.band),
               subtitle: "Band definitions are directional targets, not absolute performance labels.",
@@ -1202,6 +1289,20 @@ function renderLoginPage() {
           calculation: "Calculation method pending.",
           meaning: "Interpretation guidance pending."
         };
+      }
+
+      function chartTooltipText(target) {
+        const node = target?.closest?.(".chart-point, .chart-bar");
+        const title = node?.querySelector?.("title");
+        return title?.textContent?.trim() || "";
+      }
+
+      function tooltipPosition(event) {
+        const margin = 12;
+        const width = 280;
+        const x = Math.min(window.innerWidth - width - margin, Math.max(margin, event.clientX + margin));
+        const y = Math.min(window.innerHeight - 72, Math.max(margin, event.clientY + margin));
+        return { x, y };
       }
 
       function bandItems(metric) {

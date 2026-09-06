@@ -89,3 +89,16 @@ test("metric charts render axes labels and hoverable points", () => {
   assert.match(html, /class="chart-point"/);
   assert.match(html, /class="chart-bar"/);
 });
+
+test("metric charts expose hover and tap tooltips", () => {
+  const html = renderLoginPage();
+
+  assert.match(html, /class="chart-tooltip"/);
+  assert.match(html, /@pointerover="showChartTooltip\(\$event, false\)"/);
+  assert.match(html, /@pointermove="moveChartTooltip"/);
+  assert.match(html, /@pointerleave="hideChartTooltip\(false\)"/);
+  assert.match(html, /@click="showChartTooltip\(\$event, true\)"/);
+  assert.match(html, /function chartTooltipText/);
+  assert.match(html, /closest\?\.\("\.chart-point, \.chart-bar"\)/);
+  assert.match(html, /function tooltipPosition/);
+});
