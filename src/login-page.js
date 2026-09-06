@@ -411,7 +411,7 @@ function renderLoginPage() {
       .metric-visual {
         position: relative;
         width: 100%;
-        min-height: 154px;
+        min-height: 128px;
         border-radius: 6px;
         background:
           linear-gradient(to right, #e6ebf2 1px, transparent 1px),
@@ -423,17 +423,25 @@ function renderLoginPage() {
 
       .metric-visual svg {
         width: 100%;
-        height: 154px;
+        height: 128px;
         display: block;
         overflow: visible;
       }
 
       .manager-metric-card .metric-visual {
-        min-height: 307px;
+        min-height: 256px;
       }
 
       .manager-metric-card .metric-visual svg {
-        height: 307px;
+        height: 256px;
+      }
+
+      .executive-metric-card .metric-visual {
+        min-height: 154px;
+      }
+
+      .executive-metric-card .metric-visual svg {
+        height: 154px;
       }
 
       .executive-report {
@@ -1176,7 +1184,7 @@ function renderLoginPage() {
               m6: renderTimeToSignal,
               m7: renderCiReliability,
             };
-            return (renderers[metric.id] || renderGenericVisual)(metric);
+            return (renderers[metric.id] || renderGenericVisual)(metric, this.effectiveView === "executive");
           },
           metricReport(metric) {
             return metricPlan(metric);
@@ -1322,125 +1330,138 @@ function renderLoginPage() {
         ];
       }
 
-      function renderDeploymentFrequency(metric) {
+      function renderDeploymentFrequency(metric, wide = false) {
         const releases = Array.isArray(metric.releases) ? metric.releases : [];
         if (releases.length) {
+          const plotWidth = wide ? 96 : 76;
           const ticks = releases.slice(-16).map((release, index, rows) => {
-            const x = 16 + (index * 96) / Math.max(rows.length - 1, 1);
+            const x = 16 + (index * plotWidth) / Math.max(rows.length - 1, 1);
             return '<line class="chart-point" x1="' + x + '" y1="16" x2="' + x + '" y2="48" stroke="#2f7f67" stroke-width="3"><title>' + escapeHtml(release.tag_name || release.title || "Release") + '</title></line>';
           }).join("");
-          return svg(ticks, { xLabel: "Weeks", yLabel: "Releases" });
+          return svg(ticks, { xLabel: "Weeks", yLabel: "Releases" }, wide);
         }
-        return renderGenericVisual(metric);
+        return renderGenericVisual(metric, wide);
       }
 
-      function renderLeadTime(metric) {
+      function renderLeadTime(metric, wide = false) {
         const trend = Array.isArray(metric.trend) ? metric.trend : [];
         const p50 = trend.map((row) => row.p50_hours ?? row.p50).filter(isFiniteNumber);
         const p85 = trend.map((row) => row.p85_hours ?? row.p85).filter(isFiniteNumber);
         return svg(
-          linePath(p85, "#9db7cc", 2, 18, "P85") +
-          linePath(p50.length ? p50 : sampleValues(metric), "#2f7f67", 3, 30, "P50"),
-          { xLabel: "Weeks", yLabel: "Hours" }
+          linePath(p85, "#9db7cc", 2, 18, "P85", wide) +
+          linePath(p50.length ? p50 : sampleValues(metric), "#2f7f67", 3, 30, "P50", wide),
+          { xLabel: "Weeks", yLabel: "Hours" },
+          wide
         );
       }
 
-      function renderChangeFailureRate(metric) {
+      function renderChangeFailureRate(metric, wide = false) {
         const releases = Array.isArray(metric.releases) ? metric.releases : [];
         if (releases.length) {
+          const plotWidth = wide ? 96 : 76;
           return svg(releases.slice(-18).map((release, index, rows) => {
-            const x = 16 + (index * 96) / Math.max(rows.length - 1, 1);
+            const x = 16 + (index * plotWidth) / Math.max(rows.length - 1, 1);
             const color = release.failed ? "#a3332a" : release.signals?.length ? "#2f7f67" : "#98a2b3";
             return '<circle class="chart-point" cx="' + x + '" cy="30" r="4" fill="' + color + '"><title>' + escapeHtml((release.tag_name || "Release") + (release.failed ? ": failure signal" : ": no failure signal")) + '</title></circle>';
-          }).join(""), { xLabel: "Releases", yLabel: "Failure signal" });
+          }).join(""), { xLabel: "Releases", yLabel: "Failure signal" }, wide);
         }
-        return renderGenericVisual(metric);
+        return renderGenericVisual(metric, wide);
       }
 
-      function renderPrSize(metric) {
+      function renderPrSize(metric, wide = false) {
         const p = metric.percentiles_lines || {};
         const values = [p.p50, p.p75, p.p90].filter(isFiniteNumber);
-        if (!values.length) return renderGenericVisual(metric);
+        if (!values.length) return renderGenericVisual(metric, wide);
         const max = Math.max(...values, 1);
+        const barMax = wide ? 92 : 70;
+        const thresholdX = wide ? 108 : 88;
         const bars = values.map((value, index) => {
-          const width = Math.max(8, (value / max) * 92);
+          const width = Math.max(8, (value / max) * barMax);
           const y = 18 + index * 12;
           const label = "P" + [50, 75, 90][index];
           return '<text class="chart-tick-label" x="3" y="' + (y + 1.5) + '">' + label + '</text>' +
             '<line class="chart-bar" x1="18" y1="' + y + '" x2="' + (18 + width) + '" y2="' + y + '" stroke="#2f7f67" stroke-width="6" stroke-linecap="round"><title>' + label + ': ' + formatMetricNumber(value, "lines") + '</title></line>';
         }).join("");
-        const threshold = metric.headline?.threshold_lines ? '<line x1="108" y1="12" x2="108" y2="52" stroke="#a3332a" stroke-width="2" stroke-dasharray="3 3"><title>Large change threshold: ' + formatMetricNumber(metric.headline.threshold_lines, "lines") + '</title></line>' : "";
-        return svg(bars + threshold, { xLabel: "Changed lines", yLabel: "Percentile" });
+        const threshold = metric.headline?.threshold_lines ? '<line x1="' + thresholdX + '" y1="12" x2="' + thresholdX + '" y2="52" stroke="#a3332a" stroke-width="2" stroke-dasharray="3 3"><title>Large change threshold: ' + formatMetricNumber(metric.headline.threshold_lines, "lines") + '</title></line>' : "";
+        return svg(bars + threshold, { xLabel: "Changed lines", yLabel: "Percentile" }, wide);
       }
 
-      function renderReviewTrips(metric) {
+      function renderReviewTrips(metric, wide = false) {
         const distribution = metric.distribution || {};
         const entries = ["0", "1", "2", "3+"].map((key) => Number(distribution[key] || 0));
         const max = Math.max(...entries, 1);
         return svg(entries.map((value, index) => {
           const height = Math.max(4, (value / max) * 34);
-          const x = 26 + index * 22;
+          const x = wide ? 26 + index * 22 : 18 + index * 18;
           const color = index >= 3 ? "#a3332a" : "#2f7f67";
           const label = ["0", "1", "2", "3+"][index];
           return '<rect class="chart-bar" x="' + x + '" y="' + (50 - height) + '" width="12" height="' + height + '" rx="2" fill="' + color + '"><title>' + label + ' round trips: ' + value + '</title></rect>' +
             '<text class="chart-tick-label" x="' + (x + 6) + '" y="56" text-anchor="middle">' + label + '</text>';
-        }).join(""), { xLabel: "Review rounds", yLabel: "PRs" });
+        }).join(""), { xLabel: "Review rounds", yLabel: "PRs" }, wide);
       }
 
-      function renderTimeToSignal(metric) {
+      function renderTimeToSignal(metric, wide = false) {
         const red = metric.headline?.time_to_red_p50_seconds;
         const green = metric.headline?.time_to_green_p50_seconds;
         const max = Math.max(Number(red) || 1, Number(green) || 1);
-        const redWidth = Math.max(8, ((Number(red) || 0) / max) * 86);
-        const greenWidth = Math.max(8, ((Number(green) || 0) / max) * 86);
+        const barMax = wide ? 86 : 66;
+        const redWidth = Math.max(8, ((Number(red) || 0) / max) * barMax);
+        const greenWidth = Math.max(8, ((Number(green) || 0) / max) * barMax);
         return svg(
           '<text class="chart-tick-label" x="3" y="22">Red</text>' +
           '<rect class="chart-bar" x="24" y="16" width="' + redWidth + '" height="10" rx="3" fill="#a3332a"><title>Median time to red: ' + formatMetricNumber(red, "seconds") + '</title></rect>' +
           '<text class="chart-tick-label" x="3" y="44">Green</text>' +
           '<rect class="chart-bar" x="24" y="38" width="' + greenWidth + '" height="10" rx="3" fill="#2f7f67"><title>Median time to green: ' + formatMetricNumber(green, "seconds") + '</title></rect>',
-          { xLabel: "Minutes", yLabel: "Signal" }
+          { xLabel: "Minutes", yLabel: "Signal" },
+          wide
         );
       }
 
-      function renderCiReliability(metric) {
+      function renderCiReliability(metric, wide = false) {
         const pass = Number(metric.headline?.first_attempt_pass_rate_pct) || 0;
         const rerun = Number(metric.headline?.rerun_rate_pct) || 0;
-        const passWidth = Math.max(4, Math.min(88, pass * 0.88));
-        const rerunWidth = Math.max(4, Math.min(88, rerun * 0.88));
+        const maxWidth = wide ? 88 : 68;
+        const multiplier = wide ? 0.88 : 0.68;
+        const passWidth = Math.max(4, Math.min(maxWidth, pass * multiplier));
+        const rerunWidth = Math.max(4, Math.min(maxWidth, rerun * multiplier));
         return svg(
           '<text class="chart-tick-label" x="3" y="22">Pass</text>' +
           '<rect class="chart-bar" x="24" y="14" width="' + passWidth + '" height="12" rx="3" fill="#2f7f67"><title>First-attempt pass rate: ' + formatMetricNumber(pass, "percent") + '</title></rect>' +
           '<text class="chart-tick-label" x="3" y="46">Rerun</text>' +
           '<rect class="chart-bar" x="24" y="38" width="' + rerunWidth + '" height="12" rx="3" fill="#d4b35f"><title>Rerun rate: ' + formatMetricNumber(rerun, "percent") + '</title></rect>',
-          { xLabel: "Percent", yLabel: "CI reliability" }
+          { xLabel: "Percent", yLabel: "CI reliability" },
+          wide
         );
       }
 
-      function renderGenericVisual(metric) {
-        return svg(linePath(sampleValues(metric), "#2f7f67", 3, 30, "Value"), { xLabel: "Weeks", yLabel: "Value" });
+      function renderGenericVisual(metric, wide = false) {
+        return svg(linePath(sampleValues(metric), "#2f7f67", 3, 30, "Value", wide), { xLabel: "Weeks", yLabel: "Value" }, wide);
       }
 
-      function svg(inner, labels = {}) {
-        return '<svg viewBox="0 0 120 62" preserveAspectRatio="xMidYMid meet" role="img">' +
-          chartFrame(labels.xLabel || "X axis", labels.yLabel || "Y axis") +
+      function svg(inner, labels = {}, wide = false) {
+        const width = wide ? 120 : 100;
+        return '<svg viewBox="0 0 ' + width + ' 62" preserveAspectRatio="xMidYMid meet" role="img">' +
+          chartFrame(labels.xLabel || "X axis", labels.yLabel || "Y axis", wide) +
           inner +
           '</svg>';
       }
 
-      function chartFrame(xLabel, yLabel) {
-        return '<line class="chart-axis" x1="14" y1="52" x2="114" y2="52"/>' +
+      function chartFrame(xLabel, yLabel, wide = false) {
+        const axisEnd = wide ? 114 : 94;
+        const center = wide ? 64 : 54;
+        return '<line class="chart-axis" x1="14" y1="52" x2="' + axisEnd + '" y2="52"/>' +
           '<line class="chart-axis" x1="14" y1="10" x2="14" y2="52"/>' +
-          '<line class="chart-grid" x1="14" y1="31" x2="114" y2="31"/>' +
-          '<text class="chart-label" x="64" y="61" text-anchor="middle">' + escapeHtml(xLabel) + '</text>' +
+          '<line class="chart-grid" x1="14" y1="31" x2="' + axisEnd + '" y2="31"/>' +
+          '<text class="chart-label" x="' + center + '" y="61" text-anchor="middle">' + escapeHtml(xLabel) + '</text>' +
           '<text class="chart-label" x="2" y="31" transform="rotate(-90 2 31)" text-anchor="middle">' + escapeHtml(yLabel) + '</text>';
       }
 
-      function linePath(values, color, width, fallbackBase, seriesLabel) {
+      function linePath(values, color, width, fallbackBase, seriesLabel, wide = false) {
         const points = values.length ? values : [fallbackBase, fallbackBase - 8, fallbackBase - 3, fallbackBase - 14, fallbackBase - 10];
         const max = Math.max(...points, 1);
         const min = Math.min(...points, 0);
         const span = Math.max(max - min, 1);
-        const step = 96 / Math.max(points.length - 1, 1);
+        const step = (wide ? 96 : 76) / Math.max(points.length - 1, 1);
         const path = points.map((value, index) => {
           const x = 16 + index * step;
           const y = 50 - ((value - min) / span) * 34;
