@@ -20,6 +20,15 @@ function readConfig(env = process.env) {
     allowedEvents: parseCsv(env.GITHUB_ALLOWED_EVENTS),
     forwardUrl: env.WEBHOOK_FORWARD_URL || "",
     wrapperToken: env.WRAPPER_API_TOKEN || "",
+    metricsWindowDays: parsePositiveInt(env.METRICS_WINDOW_DAYS, 30),
+    dataConfidenceThreshold: parsePercent(env.DATA_CONFIDENCE_THRESHOLD, 0.7),
+    requiredChecks: parseCsv(env.REQUIRED_CHECKS),
+    requiredCheckSetVersion: env.REQUIRED_CHECK_SET_VERSION || "unversioned",
+    metricsConcurrency: parsePositiveInt(env.METRICS_CONCURRENCY, 8),
+    metricsCache: {
+      enabled: parseBoolean(env.METRICS_CACHE_ENABLED, true),
+      ttlMs: parseNonNegativeInt(env.METRICS_CACHE_TTL_MS, 60_000),
+    },
   };
 }
 
@@ -42,4 +51,48 @@ function parseCsv(value) {
     .filter(Boolean);
 }
 
-module.exports = { readAuthConfig, readConfig, parseCsv };
+function parsePositiveInt(value, defaultValue) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+}
+
+function parseNonNegativeInt(value, defaultValue) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultValue;
+}
+
+function parsePercent(value, defaultValue) {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return defaultValue;
+  }
+  return parsed > 1 ? parsed / 100 : parsed;
+}
+
+function parseBoolean(value, defaultValue) {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+
+  if (["1", "true", "yes", "on"].includes(String(value).toLowerCase())) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(String(value).toLowerCase())) {
+    return false;
+  }
+  return defaultValue;
+}
+
+module.exports = {
+  parseBoolean,
+  parseCsv,
+  parseNonNegativeInt,
+  parsePercent,
+  parsePositiveInt,
+  readAuthConfig,
+  readConfig,
+};

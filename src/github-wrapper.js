@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 
 const GITHUB_API = "https://api.github.com";
+const DEFAULT_PER_PAGE = 100;
 
 class GitHubMetricsWrapper {
   constructor(config, fetchImpl = globalThis.fetch) {
@@ -11,6 +12,7 @@ class GitHubMetricsWrapper {
     this.config = config;
     this.fetch = fetchImpl;
     this.eventHandlers = new Map();
+    this.rateLimit = null;
   }
 
   get repoPath() {
@@ -277,6 +279,11 @@ class GitHubMetricsWrapper {
   }
 
   async request(path, query = {}, options = {}) {
+    const { data } = await this.requestWithMeta(path, query, options);
+    return data;
+  }
+
+  async requestWithMeta(path, query = {}, options = {}) {
     const url = new URL(`${GITHUB_API}${path}`);
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined && value !== null && value !== "") {
@@ -301,30 +308,138 @@ class GitHubMetricsWrapper {
       body: options.body ? JSON.stringify(options.body) : undefined,
     });
 
-    const rateLimit = {
-      limit: response.headers.get("x-ratelimit-limit"),
-      remaining: response.headers.get("x-ratelimit-remaining"),
-      reset: response.headers.get("x-ratelimit-reset"),
-      used: response.headers.get("x-ratelimit-used"),
+    const rateLimit = readRateLimit(response.headers);
+    this.rateLimit = rateLimit;
+    const meta = {
+      rateLimit,
+      status: response.status,
+      url: String(url),
+      nextUrl: parseLinkHeader(response.headers.get("link")).next || null,
     };
 
     if (response.status === 204) {
-      return { ok: true, rateLimit };
+      return { data: { ok: true, rateLimit }, meta };
     }
 
     const text = await response.text();
     const data = text ? JSON.parse(text) : null;
 
     if (!response.ok) {
-      const error = new Error(data?.message || `GitHub API failed with ${response.status}`);
+      const rateLimitExhausted = response.status === 403 && rateLimit.remaining === 0;
+      const error = new Error(
+        rateLimitExhausted
+          ? "GitHub API rate limit exhausted"
+          : data?.message || `GitHub API failed with ${response.status}`
+      );
       error.statusCode = response.status;
+      error.code = rateLimitExhausted ? "github_rate_limit_exhausted" : "github_api_error";
       error.github = data;
       error.rateLimit = rateLimit;
+      error.meta = meta;
       throw error;
     }
 
-    return data;
+    return { data, meta };
+  }
+
+  async requestAllPages(path, query = {}, options = {}) {
+    const firstQuery = { per_page: DEFAULT_PER_PAGE, ...query };
+    const pages = [];
+    const rateLimits = [];
+    let nextUrl = null;
+
+    do {
+      const page = nextUrl
+        ? await this.requestUrlWithMeta(nextUrl, options)
+        : await this.requestWithMeta(path, firstQuery, options);
+      pages.push(page.data);
+      rateLimits.push(page.meta.rateLimit);
+      nextUrl = page.meta.nextUrl;
+    } while (nextUrl);
+
+    return {
+      data: flattenPageData(pages),
+      meta: {
+        pageCount: pages.length,
+        rateLimit: rateLimits[rateLimits.length - 1] || null,
+        rateLimits,
+      },
+    };
+  }
+
+  async requestUrlWithMeta(url, options = {}) {
+    const parsed = new URL(url);
+    if (parsed.origin !== GITHUB_API) {
+      const error = new Error("Refusing to follow non-GitHub pagination URL");
+      error.statusCode = 500;
+      throw error;
+    }
+
+    return this.requestWithMeta(`${parsed.pathname}${parsed.search}`, {}, options);
   }
 }
 
-module.exports = { GitHubMetricsWrapper };
+function readRateLimit(headers) {
+  return {
+    limit: parseHeaderInt(headers.get("x-ratelimit-limit")),
+    remaining: parseHeaderInt(headers.get("x-ratelimit-remaining")),
+    reset: parseHeaderInt(headers.get("x-ratelimit-reset")),
+    used: parseHeaderInt(headers.get("x-ratelimit-used")),
+    resource: headers.get("x-ratelimit-resource") || null,
+  };
+}
+
+function parseHeaderInt(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function parseLinkHeader(header) {
+  const links = {};
+  if (!header) {
+    return links;
+  }
+
+  for (const part of header.split(",")) {
+    const match = part.match(/<([^>]+)>;\s*rel="([^"]+)"/);
+    if (match) {
+      links[match[2]] = match[1];
+    }
+  }
+  return links;
+}
+
+function flattenPageData(pages) {
+  if (pages.every(Array.isArray)) {
+    return pages.flat();
+  }
+
+  if (pages.every((page) => page && Array.isArray(page.items))) {
+    return { ...pages[pages.length - 1], items: pages.flatMap((page) => page.items) };
+  }
+
+  const arrayKeys = pages
+    .map((page) =>
+      page && typeof page === "object"
+        ? Object.keys(page).filter((key) => Array.isArray(page[key]))
+        : []
+    )
+    .reduce((common, keys) => common.filter((key) => keys.includes(key)));
+
+  if (arrayKeys.length === 1) {
+    const key = arrayKeys[0];
+    const total = pages.reduce((sum, page) => sum + (page[key]?.length || 0), 0);
+    return { ...pages[pages.length - 1], total_count: total, [key]: pages.flatMap((page) => page[key]) };
+  }
+
+  return pages;
+}
+
+module.exports = {
+  GitHubMetricsWrapper,
+  parseLinkHeader,
+  readRateLimit,
+};

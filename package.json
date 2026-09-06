@@ -11,7 +11,7 @@
     "dev": "vercel dev",
     "dev:local": "node local-dev-server.js",
     "test": "node --test",
-    "lint": "node --check api/index.js && node --check api/login.js && node --check api/github/[...path].js && node --check api/webhooks/github.js && node --check local-dev-server.js && node --check src/auth-service.js && node --check src/config.js && node --check src/github-wrapper.js && node --check src/hash-service.js && node --check src/http.js && node --check src/login-page.js",
+    "lint": "node --check api/index.js && node --check api/login.js && node --check api/github/[...path].js && node --check api/webhooks/github.js && node --check local-dev-server.js && node --check src/auth-service.js && node --check src/config.js && node --check src/github-wrapper.js && node --check src/hash-service.js && node --check src/http.js && node --check src/login-page.js && node --check src/metrics/cache.js && node --check src/metrics/concurrency.js && node --check src/metrics/scope.js && node --check src/metrics/stats.js && node --check src/metrics/window.js",
     "deploy": "vercel --prod"
   }
 }
