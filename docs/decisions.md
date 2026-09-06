@@ -401,3 +401,74 @@ the revert scan behind Change Failure Rate.
 **Why it is called out:** this is the most likely silent-undercount bug in the build. It
 produces no error, no warning, and a plausible-looking number. It has a dedicated test
 (M2 test 8).
+
+## D17: Lead Time anchors on first commit, enabled by a ticket-branch convention
+
+**Supersedes D4's start anchor.** D4 chose PR `created_at` because a first commit could be
+pushed to a branch long before a PR was opened, making it an arbitrary start point. That
+reasoning was sound given no convention existed. This entry changes the convention rather
+than the metric.
+
+**Decision:** Lead Time for Changes is measured **first commit → production**, the
+canonical DORA definition. It is made meaningful by an organisational convention:
+**pushing to a ticket-named branch is the only way a work item enters "In Progress."**
+
+**Rationale — the incentive does the enforcement.** D4's anchor left the sharpest gaming
+vector in the metric set open: open the PR minutes before merge and lead time collapses,
+unilaterally and untraceably. Anchoring on first commit closes it, and the branch
+convention stops first-commit from being arbitrary. Critically, the resulting incentive
+points the right way — a developer *wants* their ticket visible as in progress, so they
+push early, which is also the behaviour we want. This is alignment rather than policing,
+and it costs one automation.
+
+**Alternative considered and rejected:** anchoring on the work-item status transition
+itself. Rejected because it silently redefines the metric — ticket-to-production is cycle
+time, not DORA lead time — and it moves the gaming vector into the tracker rather than
+removing it. Deriving ticket state *from* the git action inverts that: the tracker becomes
+a consequence of the commit, not a competing source of truth.
+
+**Use the commit's author date, not the committer date.** A rebase rewrites committer
+dates and preserves author dates, so committer date would silently understate the lead time
+of any rebased branch. Note this is the opposite of the choice M5 requires, where committer
+date is correct because the question there is when a push *landed* relative to a review.
+The two metrics need different fields from the same object, and conflating them is a
+plausible bug.
+
+**Precondition.** Until the branch/ticket convention exists and is enforced in the
+tracker's automation, first-commit is noisy — a stale branch from three months ago is not a
+lead time. The prototype therefore keeps D4's PR-open anchor until the convention lands,
+and reports pre-PR branch age as the companion figure that shows how much work the current
+anchor is not counting.
+
+**Limitations:**
+- A branch pushed on day one, paused, and resumed three weeks later reports three weeks.
+  That is arguably correct DORA lead time, but it will be argued about; report the
+  distribution, never a target.
+- A force-push can destroy the original first commit. Capturing commits at push time via
+  the webhook rather than re-deriving them later is the mitigation — another reason
+  push ingestion and a persisted event log land early (D8, §7.1 of the architecture notes).
+
+## D18: Authentication is organisational SSO by default
+
+**Supersedes the Prototype Authentication decision above**, which used environment-configured
+usernames with base64 "hashes" and was explicitly labelled a temporary gate.
+
+**Decision:** Authenticate against the organisation's identity provider via OIDC. Roles and
+audiences derive from IdP group claims rather than from a separate mapping maintained by
+this platform.
+
+**Rationale:**
+- In a regulated fintech, SSO with MFA and central deprovisioning is a baseline
+  expectation, not a feature. A platform holding delivery data for every engineer should
+  not be the one system with its own password list.
+- **Group claims do double duty.** They supply both the audience model (who sees the
+  Manager view, who sees the Executive view) and squad membership, so the access model in
+  §6 of the architecture notes needs no separate roster to drift out of date.
+- It improves pseudonymisation: the IdP subject is a stable identity that survives someone
+  changing their GitHub handle, and it is what gets hashed at ingestion.
+- Joiners and leavers are handled by the IdP. Nobody has to remember to revoke access to a
+  metrics dashboard.
+
+**Limitation:** local development needs a bypass. Keep it behind an explicit, loudly named
+flag that is off by default and cannot be enabled in a deployed environment — a
+convenience gate that silently survives into production is how this class of system leaks.
