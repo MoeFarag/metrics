@@ -5,6 +5,7 @@ const { URL } = require("url");
 const github = require("./api/github/[...path]");
 const index = require("./api/index");
 const login = require("./api/login");
+const metrics = require("./api/metrics/[...path]");
 const webhook = require("./api/webhooks/github");
 
 loadEnvFile(".env");
@@ -35,6 +36,14 @@ const server = http.createServer((req, res) => {
       .split("/")
       .filter(Boolean);
     return github(req, res);
+  }
+
+  if (url.pathname.startsWith("/api/metrics")) {
+    req.query.path = url.pathname
+      .replace(/^\/api\/metrics\/?/, "")
+      .split("/")
+      .filter(Boolean);
+    return metrics(req, res);
   }
 
   res.statusCode = 404;
