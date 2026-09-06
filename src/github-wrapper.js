@@ -31,6 +31,27 @@ class GitHubMetricsWrapper {
     return this.request(`/repos/${this.repoPath}/pulls`, params);
   }
 
+  async listPullFiles(pullNumber, params = {}) {
+    return this.requestAllPages(
+      `/repos/${this.repoPath}/pulls/${encodeURIComponent(pullNumber)}/files`,
+      params
+    );
+  }
+
+  async listPullReviews(pullNumber, params = {}) {
+    return this.requestAllPages(
+      `/repos/${this.repoPath}/pulls/${encodeURIComponent(pullNumber)}/reviews`,
+      params
+    );
+  }
+
+  async listPullCommits(pullNumber, params = {}) {
+    return this.requestAllPages(
+      `/repos/${this.repoPath}/pulls/${encodeURIComponent(pullNumber)}/commits`,
+      params
+    );
+  }
+
   async listCommits(params = {}) {
     return this.request(`/repos/${this.repoPath}/commits`, params);
   }
