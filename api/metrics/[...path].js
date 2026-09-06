@@ -1,7 +1,12 @@
 const { readConfig } = require("../../src/config");
 const { GitHubMetricsWrapper } = require("../../src/github-wrapper");
 const { methodNotAllowed, sendJson, toQueryObject } = require("../../src/http");
+const { computeCiReliability, computeTimeToSignal, loadActionsWindow } = require("../../src/metrics/actions");
+const { MemoCache } = require("../../src/metrics/cache");
+const { loadMergedPullRequests, loadPullRequestDetails } = require("../../src/metrics/pr-loader");
+const { summarizePrSizeDistribution, summarizePullRequestSize } = require("../../src/metrics/pr-size");
 const { getMetricRegistry, getSharedLimitations } = require("../../src/metrics/registry");
+const { calculateDeploymentFrequency } = require("../../src/metrics/releases");
 const { parseMetricQueryOptions } = require("../../src/metrics/scope");
 const { resolveMetricsWindow } = require("../../src/metrics/window");
 
@@ -33,7 +38,18 @@ module.exports = async function handler(req, res) {
     if (path === "summary") {
       const options = parseMetricQueryOptions({ ...query, metric: "summary" }, config);
       const repoGithub = new GitHubMetricsWrapper({ ...config, ...options.repo });
+      const metricConfig = { ...config, window_days: options.window_days };
+      const cache = new MemoCache(config.metricsCache);
+      const window = resolveMetricsWindow({ metricsWindowDays: options.window_days });
       const repo = await repoGithub.getRepo();
+      const metrics = await calculateMetrics({
+        github: repoGithub,
+        config: metricConfig,
+        window,
+        includePriorWindow: options.include_prior_window,
+        cache,
+      });
+
       return sendJson(res, 200, {
         repo: {
           full_name: repo.full_name,
@@ -41,21 +57,10 @@ module.exports = async function handler(req, res) {
           default_branch: repo.default_branch,
           private: repo.private,
         },
-        window: resolveMetricsWindow({ metricsWindowDays: options.window_days }),
+        window,
         computed_at: new Date().toISOString(),
-        rateLimit: repoGithub.rateLimit,
-        metrics: getMetricRegistry().map((metric) => ({
-          id: metric.id,
-          name: metric.name,
-          family: metric.family,
-          pair: metric.pair,
-          status: "pending_implementation",
-          band: "pending",
-          direction: "not_computed",
-          sample_size: 0,
-          data_confidence: null,
-          note: "Metric engine is being implemented in a separate workstream.",
-        })),
+        rateLimit: repoGithub.rateLimit || metrics.find((metric) => metric.rateLimit)?.rateLimit || null,
+        metrics,
         limitations: getSharedLimitations(),
       });
     }
@@ -74,4 +79,144 @@ module.exports = async function handler(req, res) {
 
 function normalizePath(path) {
   return (Array.isArray(path) ? path.join("/") : path || "summary").replace(/^\/+|\/+$/g, "");
+}
+
+async function calculateMetrics({ github, config, window, includePriorWindow, cache }) {
+  const registry = getMetricRegistry();
+  const byId = new Map(registry.map((metric) => [metric.id, metric]));
+  const results = new Map();
+
+  const [deploymentFrequency, prSize, actionsData] = await Promise.all([
+    safeMetric(
+      "m1",
+      () =>
+        calculateDeploymentFrequency({
+          github,
+          config,
+          includePriorWindow,
+          cache,
+        }),
+      byId
+    ),
+    safeMetric("m4", () => calculatePullRequestSizeMetric({ github, config, window, cache }), byId),
+    safeMetric("actions", () => loadActionsWindow({ github, config, window }), byId),
+  ]);
+
+  results.set("m1", deploymentFrequency);
+  results.set("m4", prSize);
+
+  if (actionsData.error) {
+    results.set("m6", metricError("m6", byId, actionsData.error));
+    results.set("m7", metricError("m7", byId, actionsData.error));
+  } else {
+    results.set("m6", normalizeMetric("m6", computeTimeToSignal(actionsData, { window, config }), byId));
+    results.set("m7", normalizeMetric("m7", computeCiReliability(actionsData, { window, config }), byId));
+  }
+
+  for (const id of ["m2", "m3", "m5"]) {
+    results.set(id, pendingMetric(id, byId));
+  }
+
+  return registry.map((metric) => results.get(metric.id) || pendingMetric(metric.id, byId));
+}
+
+async function calculatePullRequestSizeMetric({ github, config, window, cache }) {
+  const pulls = await loadMergedPullRequests(github, {
+    windowStart: window.window_start,
+    windowEnd: window.window_end,
+  });
+  const details = await loadPullRequestDetails(github, pulls, {
+    concurrency: config.metricsConcurrency,
+    cache,
+  });
+  const rows = details.map(({ pull, files }) => summarizePullRequestSize(pull, files));
+  return summarizePrSizeDistribution(rows, {
+    totalMerged: pulls.length,
+  });
+}
+
+async function safeMetric(id, load, registryById) {
+  try {
+    const result = await load();
+    return normalizeMetric(id, result, registryById);
+  } catch (error) {
+    return metricError(id, registryById, error);
+  }
+}
+
+function normalizeMetric(id, result, registryById) {
+  if (id === "actions") {
+    return result;
+  }
+
+  const meta = registryById.get(id) || {};
+  return {
+    id,
+    name: meta.name,
+    family: meta.family,
+    pair: meta.pair,
+    question: meta.question,
+    status: result.state || "ok",
+    band: result.headline?.band || bandForConfidence(result.data_confidence),
+    direction: result.direction || "not_computed",
+    sample_size: result.sample_size ?? null,
+    data_confidence: result.data_confidence ?? null,
+    note: buildNote(result),
+    ...result,
+  };
+}
+
+function pendingMetric(id, registryById) {
+  const meta = registryById.get(id) || {};
+  return {
+    id,
+    name: meta.name,
+    family: meta.family,
+    pair: meta.pair,
+    question: meta.question,
+    status: "pending_implementation",
+    band: "pending",
+    direction: "not_computed",
+    sample_size: 0,
+    data_confidence: null,
+    note: "Metric implementation is still in progress.",
+  };
+}
+
+function metricError(id, registryById, error) {
+  const meta = registryById.get(id) || {};
+  return {
+    id,
+    name: meta.name,
+    family: meta.family,
+    pair: meta.pair,
+    question: meta.question,
+    status: "error",
+    band: "low",
+    direction: "not_computed",
+    sample_size: 0,
+    data_confidence: 0,
+    note: error.message,
+    rateLimit: error.rateLimit || null,
+    error: error.code || "metric_error",
+  };
+}
+
+function buildNote(result) {
+  if (Array.isArray(result.caveats) && result.caveats.length) {
+    return result.caveats.join(", ");
+  }
+  if (result.state === "no_releases") {
+    return "No releases detected in the selected window, which impacts release-based metrics.";
+  }
+  if (result.direction_basis) {
+    return result.direction_basis;
+  }
+  return result.metric || "";
+}
+
+function bandForConfidence(confidence) {
+  if (confidence === null || confidence === undefined) return "pending";
+  if (confidence < 0.7) return "low";
+  return "ready";
 }
