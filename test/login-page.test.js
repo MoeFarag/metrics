@@ -54,3 +54,17 @@ test("metric labels are human readable and charts expose hover titles", () => {
   assert.match(html, /height: 128px;/);
   assert.doesNotMatch(html, /<strong>Metric<\/strong>/);
 });
+
+test("metric charts render axes labels and hoverable points", () => {
+  const html = renderLoginPage();
+
+  assert.match(html, /function chartFrame/);
+  assert.match(html, /class="chart-axis"/);
+  assert.match(html, /class="chart-label"/);
+  assert.match(html, /xLabel: "Weeks"/);
+  assert.match(html, /yLabel: "Releases"/);
+  assert.match(html, /xLabel: "Changed lines"/);
+  assert.match(html, /yLabel: "CI reliability"/);
+  assert.match(html, /class="chart-point"/);
+  assert.match(html, /class="chart-bar"/);
+});
