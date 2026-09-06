@@ -35,6 +35,14 @@ class GitHubMetricsWrapper {
     return this.request(`/repos/${this.repoPath}/commits`, params);
   }
 
+  async getCommit(ref) {
+    return this.request(`/repos/${this.repoPath}/commits/${encodeURIComponent(ref)}`);
+  }
+
+  async listReleases(params = {}) {
+    return this.request(`/repos/${this.repoPath}/releases`, params);
+  }
+
   async listWorkflows(params = {}) {
     return this.request(`/repos/${this.repoPath}/actions/workflows`, params);
   }
