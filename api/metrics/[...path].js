@@ -3,10 +3,12 @@ const { GitHubMetricsWrapper } = require("../../src/github-wrapper");
 const { methodNotAllowed, sendJson, toQueryObject } = require("../../src/http");
 const { computeCiReliability, computeTimeToSignal, loadActionsWindow } = require("../../src/metrics/actions");
 const { MemoCache } = require("../../src/metrics/cache");
+const { calculateChangeFailureRate, calculateLeadTimeForChanges } = require("../../src/metrics/dora");
 const { loadMergedPullRequests, loadPullRequestDetails } = require("../../src/metrics/pr-loader");
 const { summarizePrSizeDistribution, summarizePullRequestSize } = require("../../src/metrics/pr-size");
 const { getMetricRegistry, getSharedLimitations } = require("../../src/metrics/registry");
 const { calculateDeploymentFrequency } = require("../../src/metrics/releases");
+const { calculateReviewRoundTrips } = require("../../src/metrics/review-round-trips");
 const { parseMetricQueryOptions } = require("../../src/metrics/scope");
 const { resolveMetricsWindow } = require("../../src/metrics/window");
 
@@ -86,7 +88,8 @@ async function calculateMetrics({ github, config, window, includePriorWindow, ca
   const byId = new Map(registry.map((metric) => [metric.id, metric]));
   const results = new Map();
 
-  const [deploymentFrequency, prSize, actionsData] = await Promise.all([
+  const [deploymentFrequency, leadTime, changeFailureRate, prSize, reviewRoundTrips, actionsData] =
+    await Promise.all([
     safeMetric(
       "m1",
       () =>
@@ -98,12 +101,46 @@ async function calculateMetrics({ github, config, window, includePriorWindow, ca
         }),
       byId
     ),
+    safeMetric(
+      "m2",
+      () =>
+        calculateLeadTimeForChanges({
+          github,
+          config,
+          cache,
+        }),
+      byId
+    ),
+    safeMetric(
+      "m3",
+      () =>
+        calculateChangeFailureRate({
+          github,
+          config,
+          cache,
+        }),
+      byId
+    ),
     safeMetric("m4", () => calculatePullRequestSizeMetric({ github, config, window, cache }), byId),
+    safeMetric(
+      "m5",
+      () =>
+        calculateReviewRoundTrips({
+          github,
+          config,
+          includePriorWindow,
+          cache,
+        }),
+      byId
+    ),
     safeMetric("actions", () => loadActionsWindow({ github, config, window }), byId),
   ]);
 
   results.set("m1", deploymentFrequency);
+  results.set("m2", leadTime);
+  results.set("m3", changeFailureRate);
   results.set("m4", prSize);
+  results.set("m5", reviewRoundTrips);
 
   if (actionsData.error) {
     results.set("m6", metricError("m6", byId, actionsData.error));
@@ -111,10 +148,6 @@ async function calculateMetrics({ github, config, window, includePriorWindow, ca
   } else {
     results.set("m6", normalizeMetric("m6", computeTimeToSignal(actionsData, { window, config }), byId));
     results.set("m7", normalizeMetric("m7", computeCiReliability(actionsData, { window, config }), byId));
-  }
-
-  for (const id of ["m2", "m3", "m5"]) {
-    results.set(id, pendingMetric(id, byId));
   }
 
   return registry.map((metric) => results.get(metric.id) || pendingMetric(metric.id, byId));
@@ -150,6 +183,7 @@ function normalizeMetric(id, result, registryById) {
   }
 
   const meta = registryById.get(id) || {};
+  const dataConfidence = result.data_confidence ?? result.confidence?.score ?? null;
   return {
     id,
     name: meta.name,
@@ -157,12 +191,13 @@ function normalizeMetric(id, result, registryById) {
     pair: meta.pair,
     question: meta.question,
     status: result.state || "ok",
-    band: result.headline?.band || bandForConfidence(result.data_confidence),
+    band: result.headline?.band || bandForConfidence(dataConfidence),
     direction: result.direction || "not_computed",
     sample_size: result.sample_size ?? null,
-    data_confidence: result.data_confidence ?? null,
+    data_confidence: dataConfidence,
     note: buildNote(result),
     ...result,
+    data_confidence: dataConfidence,
   };
 }
 
@@ -203,6 +238,9 @@ function metricError(id, registryById, error) {
 }
 
 function buildNote(result) {
+  if (Array.isArray(result.low_confidence_reasons) && result.low_confidence_reasons.length) {
+    return result.low_confidence_reasons.join(", ");
+  }
   if (Array.isArray(result.caveats) && result.caveats.length) {
     return result.caveats.join(", ");
   }
