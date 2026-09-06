@@ -1,7 +1,7 @@
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function resolveMetricsWindow(config = {}, now = new Date()) {
-  const days = parseWindowDays(config.metricsWindowDays ?? config.METRICS_WINDOW_DAYS, 30);
+  const days = parseWindowDays(config.metricsWindowDays ?? config.METRICS_WINDOW_DAYS, 60);
   const windowEnd = new Date(now);
   const windowStart = addDays(windowEnd, -days);
   const priorWindowEnd = new Date(windowStart);
@@ -17,7 +17,7 @@ function resolveMetricsWindow(config = {}, now = new Date()) {
   };
 }
 
-function parseWindowDays(value, defaultDays = 30) {
+function parseWindowDays(value, defaultDays = 60) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultDays;
 }

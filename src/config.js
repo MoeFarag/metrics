@@ -20,7 +20,7 @@ function readConfig(env = process.env) {
     allowedEvents: parseCsv(env.GITHUB_ALLOWED_EVENTS),
     forwardUrl: env.WEBHOOK_FORWARD_URL || "",
     wrapperToken: env.WRAPPER_API_TOKEN || "",
-    metricsWindowDays: parsePositiveInt(env.METRICS_WINDOW_DAYS, 30),
+    metricsWindowDays: parsePositiveInt(env.METRICS_WINDOW_DAYS, 60),
     dataConfidenceThreshold: parsePercent(env.DATA_CONFIDENCE_THRESHOLD, 0.7),
     requiredChecks: parseCsv(env.REQUIRED_CHECKS),
     requiredCheckSetVersion: env.REQUIRED_CHECK_SET_VERSION || "unversioned",

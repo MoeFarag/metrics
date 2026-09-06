@@ -368,7 +368,7 @@ function renderLoginPage() {
 
       .metric-visual {
         width: 100%;
-        min-height: 62px;
+        min-height: 128px;
         border-radius: 6px;
         background:
           linear-gradient(to right, #e6ebf2 1px, transparent 1px),
@@ -380,13 +380,18 @@ function renderLoginPage() {
 
       .metric-visual svg {
         width: 100%;
-        height: 62px;
+        height: 128px;
         display: block;
+      }
+
+      .chart-point,
+      .chart-bar {
+        cursor: help;
       }
 
       .metric-footer {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
         font-size: 12px;
       }
@@ -649,8 +654,8 @@ function renderLoginPage() {
                 <div class="status-row">
                   <span class="chip">{{ confidenceLabel(metric) }}</span>
                 </div>
-                <div class="metric-visual" aria-hidden="true" v-html="metricVisual(metric)"></div>
-                <p class="muted">{{ metric.note || metric.question }}</p>
+                <div class="metric-visual" v-html="metricVisual(metric)"></div>
+                <p class="muted">{{ metricNote(metric) }}</p>
               </div>
 
               <div v-if="effectiveView === 'manager'" class="manager-detail">
@@ -664,10 +669,6 @@ function renderLoginPage() {
                   <button class="band-button" type="button" @click="openBand(metric)">
                     <span class="chip" :class="metric.band">{{ bandLabel(metric.band) }}</span>
                   </button>
-                </div>
-                <div>
-                  <strong>Metric</strong>
-                  <span>{{ metricRef(metric) }}</span>
                 </div>
                 <div>
                   <strong>Details</strong>
@@ -730,8 +731,8 @@ function renderLoginPage() {
         "Production deploys are GitHub Releases. If no qualifying releases are detected, DORA release metrics show a no-release state instead of zeros.",
         "Change-failure signals look for labels or terms matching hotfix, incident, bug, and revert, plus explicit Git revert commits where detectable.",
         "Phase one uses live GitHub API reads only. There is no datastore, webhook ingestion, or historical snapshot.",
-        "Direction is omitted until explicitly computed and until the sample clears the noise gates.",
-        "Required-check metrics need a configured required-check list; public repo access alone does not reveal which Actions jobs block merge."
+        "Direction uses the current 60-day window against the prior 60 days when enough weekly signal is present.",
+        "Required-check metrics use configured branch-protection checks when supplied; otherwise the prototype falls back to observed Actions jobs and marks that caveat."
       ];
       const metricShells = [
         { id: "m1", name: "Deployment Frequency", family: "DORA", pair: null, question: "How often do changes reach production?" },
@@ -800,7 +801,7 @@ function renderLoginPage() {
             return this.effectiveView === "manager" ? "Manager view" : "Executive view";
           },
           windowLabel() {
-            const days = this.repoSummary?.window?.window_days || 30;
+            const days = this.repoSummary?.window?.window_days || 60;
             return days + " days";
           },
           rateLimitLabel() {
@@ -937,14 +938,17 @@ function renderLoginPage() {
             return Math.round(metric.data_confidence * 100) + "% confidence";
           },
           directionLabel(metric) {
-            return titleCase(metric.direction || "pending").replace(/_/g, " ");
+            return displayLabel(metric.direction || "pending");
           },
           directionClass(metric) {
             const direction = metric.direction || "pending";
             return direction === "not_computed" || direction === "insufficient_data" ? "pending" : direction;
           },
           bandLabel(band) {
-            return titleCase(band || "pending");
+            return displayLabel(band || "pending");
+          },
+          metricNote(metric) {
+            return describeNote(metric.note || metric.question || "");
           },
           metricVisual(metric) {
             const renderers = {
@@ -980,16 +984,22 @@ function renderLoginPage() {
 
       function detailItems(metric) {
         const items = [
-          metric.note || metric.question || "Details pending.",
-          "Status: " + titleCase(metric.status || "ok").replace(/_/g, " "),
-          "Direction: " + titleCase(metric.direction || "pending").replace(/_/g, " "),
-          "Band: " + titleCase(metric.band || "pending"),
+          describeNote(metric.note || metric.question || "Details pending."),
+          "Status: " + displayLabel(metric.status || "ok"),
+          "Direction: " + displayLabel(metric.direction || "pending"),
+          "Band: " + displayLabel(metric.band || "pending"),
           "Sample: " + (metric.sample_size ?? 0),
         ];
         if (metric.confidence_note) items.push(metric.confidence_note);
-        if (Array.isArray(metric.caveats)) items.push(...metric.caveats.slice(0, 4));
-        if (Array.isArray(metric.low_confidence_reasons)) items.push(...metric.low_confidence_reasons.slice(0, 4));
-        if (Array.isArray(metric.notes)) items.push(...metric.notes.slice(0, 4));
+        if (metric.required_checks_state === "observed_fallback") {
+          items.push("Required checks: using observed Actions jobs because REQUIRED_CHECKS is not configured.");
+        }
+        if (Array.isArray(metric.observed_job_names) && metric.observed_job_names.length) {
+          items.push("Observed Actions jobs: " + metric.observed_job_names.slice(0, 6).map(displayLabel).join(", "));
+        }
+        if (Array.isArray(metric.caveats)) items.push(...metric.caveats.slice(0, 4).map(describeTag));
+        if (Array.isArray(metric.low_confidence_reasons)) items.push(...metric.low_confidence_reasons.slice(0, 4).map(describeTag));
+        if (Array.isArray(metric.notes)) items.push(...metric.notes.slice(0, 4).map(describeTag));
         if (Array.isArray(metric.evidence_rows) && metric.evidence_rows.length) {
           items.push("Evidence rows available: " + metric.evidence_rows.length);
         }
@@ -1018,7 +1028,7 @@ function renderLoginPage() {
         if (releases.length) {
           const ticks = releases.slice(-16).map((release, index, rows) => {
             const x = 8 + (index * 84) / Math.max(rows.length - 1, 1);
-            return '<line x1="' + x + '" y1="14" x2="' + x + '" y2="48" stroke="#2f7f67" stroke-width="3"/>';
+            return '<line class="chart-point" x1="' + x + '" y1="14" x2="' + x + '" y2="48" stroke="#2f7f67" stroke-width="3"><title>' + escapeHtml(release.tag_name || release.title || "Release") + '</title></line>';
           }).join("");
           return svg(ticks + '<line x1="6" y1="48" x2="94" y2="48" stroke="#cbd5e1" stroke-width="2"/>');
         }
@@ -1041,7 +1051,7 @@ function renderLoginPage() {
           return svg(releases.slice(-18).map((release, index, rows) => {
             const x = 6 + (index * 88) / Math.max(rows.length - 1, 1);
             const color = release.failed ? "#a3332a" : release.signals?.length ? "#2f7f67" : "#98a2b3";
-            return '<circle cx="' + x + '" cy="30" r="4" fill="' + color + '"/>';
+            return '<circle class="chart-point" cx="' + x + '" cy="30" r="4" fill="' + color + '"><title>' + escapeHtml((release.tag_name || "Release") + (release.failed ? ": failure signal" : ": no failure signal")) + '</title></circle>';
           }).join(""));
         }
         return renderGenericVisual(metric);
@@ -1055,7 +1065,7 @@ function renderLoginPage() {
         const bars = values.map((value, index) => {
           const width = Math.max(8, (value / max) * 76);
           const y = 14 + index * 14;
-          return '<line x1="12" y1="' + y + '" x2="' + (12 + width) + '" y2="' + y + '" stroke="#2f7f67" stroke-width="6" stroke-linecap="round"/>';
+          return '<line class="chart-bar" x1="12" y1="' + y + '" x2="' + (12 + width) + '" y2="' + y + '" stroke="#2f7f67" stroke-width="6" stroke-linecap="round"><title>P' + [50, 75, 90][index] + ': ' + formatMetricNumber(value, "lines") + '</title></line>';
         }).join("");
         const threshold = metric.headline?.threshold_lines ? '<line x1="82" y1="8" x2="82" y2="54" stroke="#a3332a" stroke-width="2" stroke-dasharray="3 3"/>' : "";
         return svg(bars + threshold);
@@ -1069,7 +1079,7 @@ function renderLoginPage() {
           const height = Math.max(4, (value / max) * 42);
           const x = 14 + index * 20;
           const color = index >= 3 ? "#a3332a" : "#2f7f67";
-          return '<rect x="' + x + '" y="' + (54 - height) + '" width="12" height="' + height + '" rx="2" fill="' + color + '"/>';
+          return '<rect class="chart-bar" x="' + x + '" y="' + (54 - height) + '" width="12" height="' + height + '" rx="2" fill="' + color + '"><title>' + ["0", "1", "2", "3+"][index] + ' round trips: ' + value + '</title></rect>';
         }).join(""));
       }
 
@@ -1080,8 +1090,8 @@ function renderLoginPage() {
         const redWidth = Math.max(8, ((Number(red) || 0) / max) * 72);
         const greenWidth = Math.max(8, ((Number(green) || 0) / max) * 72);
         return svg(
-          '<rect x="12" y="16" width="' + redWidth + '" height="10" rx="3" fill="#a3332a"/>' +
-          '<rect x="12" y="38" width="' + greenWidth + '" height="10" rx="3" fill="#2f7f67"/>'
+          '<rect class="chart-bar" x="12" y="16" width="' + redWidth + '" height="10" rx="3" fill="#a3332a"><title>Median time to red: ' + formatMetricNumber(red, "seconds") + '</title></rect>' +
+          '<rect class="chart-bar" x="12" y="38" width="' + greenWidth + '" height="10" rx="3" fill="#2f7f67"><title>Median time to green: ' + formatMetricNumber(green, "seconds") + '</title></rect>'
         );
       }
 
@@ -1091,8 +1101,8 @@ function renderLoginPage() {
         const passWidth = Math.max(4, Math.min(88, pass * 0.88));
         const rerunWidth = Math.max(4, Math.min(88, rerun * 0.88));
         return svg(
-          '<rect x="8" y="14" width="' + passWidth + '" height="12" rx="3" fill="#2f7f67"/>' +
-          '<rect x="8" y="38" width="' + rerunWidth + '" height="12" rx="3" fill="#d4b35f"/>'
+          '<rect class="chart-bar" x="8" y="14" width="' + passWidth + '" height="12" rx="3" fill="#2f7f67"><title>First-attempt pass rate: ' + formatMetricNumber(pass, "percent") + '</title></rect>' +
+          '<rect class="chart-bar" x="8" y="38" width="' + rerunWidth + '" height="12" rx="3" fill="#d4b35f"><title>Rerun rate: ' + formatMetricNumber(rerun, "percent") + '</title></rect>'
         );
       }
 
@@ -1115,7 +1125,12 @@ function renderLoginPage() {
           const y = 52 - ((value - min) / span) * 40;
           return (index === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1);
         }).join(" ");
-        return '<path d="' + path + '" fill="none" stroke="' + color + '" stroke-width="' + width + '" vector-effect="non-scaling-stroke"/>';
+        const circles = points.map((value, index) => {
+          const x = 6 + index * step;
+          const y = 52 - ((value - min) / span) * 40;
+          return '<circle class="chart-point" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.6" fill="' + color + '"><title>Week ' + (index + 1) + ': ' + formatMetricNumber(value, "") + '</title></circle>';
+        }).join("");
+        return '<path d="' + path + '" fill="none" stroke="' + color + '" stroke-width="' + width + '" vector-effect="non-scaling-stroke"/>' + circles;
       }
 
       function sampleValues(metric) {
@@ -1132,10 +1147,64 @@ function renderLoginPage() {
       function titleCase(value) {
         return String(value || "")
           .trim()
+          .replace(/[_-]+/g, " ")
           .split(/\s+/)
           .filter(Boolean)
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
           .join(" ");
+      }
+
+      function displayLabel(value) {
+        const key = String(value || "").trim().toLowerCase();
+        const labels = {
+          ci_platform: "CI Platform",
+          direction_not_computed: "Direction not computed",
+          format_lint_title: "Formatting or lint title",
+          insufficient_coverage: "Insufficient coverage",
+          insufficient_data: "Insufficient data",
+          insufficient_required_check_coverage: "Insufficient required-check coverage",
+          insufficient_sample: "Insufficient sample",
+          low_confidence: "Low confidence",
+          mechanical_label: "Mechanical label",
+          minimum_magnitude_not_met: "Minimum magnitude not met",
+          needs_config: "Needs configuration",
+          no_releases: "No releases",
+          not_computed: "Not computed",
+          observed_fallback: "Observed-job fallback",
+          only_excluded_paths: "Only excluded paths",
+          pending_implementation: "Pending implementation",
+          prior_window_not_requested: "Prior window not requested",
+          push_at_uses_workflow_run_created_at: "Push time uses workflow-run creation time",
+          required_checks_need_config: "Required checks need configuration",
+          required_checks_observed_jobs_fallback: "Required checks use observed Actions jobs",
+          some_release_windows_used_time_fallback: "Some release windows used time fallback",
+          within_historical_variation: "Within historical variation"
+        };
+        return labels[key] || titleCase(key || value);
+      }
+
+      function describeTag(value) {
+        const key = String(value || "").trim();
+        return displayLabel(key) + (/[a-z0-9]+_[a-z0-9_]+/i.test(key) ? " (" + key + ")" : "");
+      }
+
+      function describeNote(value) {
+        return String(value || "")
+          .split(",")
+          .map((part) => {
+            const trimmed = part.trim();
+            return /[a-z0-9]+_[a-z0-9_]+/i.test(trimmed) ? describeTag(trimmed) : trimmed;
+          })
+          .filter(Boolean)
+          .join(", ");
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
       }
 
       function formatTime(value) {
@@ -1164,6 +1233,9 @@ function renderLoginPage() {
         }
         if (unit === "seconds") {
           return Math.round(number / 60) + "m";
+        }
+        if (unit === "lines") {
+          return Math.round(number) + " lines";
         }
         return Number.isInteger(number) ? String(number) : number.toFixed(1);
       }

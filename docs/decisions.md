@@ -232,16 +232,16 @@ point without a gap in history.
 
 **What this costs, and the accepted limits:**
 
-- **Latency and rate budget.** A cold full refresh over 90 days runs roughly 1,100–1,300
+- **Latency and rate budget.** A cold full refresh over 60 days runs roughly 750–900
   API calls, dominated by the per-run jobs call (M6/M7) and the three per-PR calls
   (M4/M5). Against the 5,000 req/hr authenticated budget that is about four full cold
   refreshes per hour — adequate for one or two users, and not for more. Mitigations are
   in-process memoisation, bounded concurrency, and the toggle below.
-- **Prior-window comparison is opt-in.** Computing `direction` against the prior 90 days
-  doubles the call count, so it is a user-triggered toggle rather than part of the default
-  load. Until requested, `direction` reports "not computed" — which the noise-band model
-  already has a state for. The third noise gate is unaffected: its median absolute
-  deviation is computed across the 13 weekly buckets **inside** the displayed window, so
+- **Prior-window comparison is explicitly requested by the dashboard.** Computing
+  `direction` against the prior 60 days roughly doubles the call count, so API consumers
+  may still omit it. Until requested, `direction` reports "not computed" — which the
+  noise-band model already has a state for. The third noise gate is unaffected: its median
+  absolute deviation is computed across the weekly buckets **inside** the displayed window, so
   it needs no stored history either.
 - **Reproducibility.** Because SHAs are re-resolved on every load rather than snapshotted,
   a force-moved tag or a deleted branch can change a historical number between two loads
@@ -323,20 +323,21 @@ if **either** metric degrades, improving only if both improve or one improves an
 other is flat. An improvement in one half with the other degrading is what gaming looks
 like and must not surface as an improvement.
 
-## D13: Default window is a rolling quarter; prior-quarter comparison is opt-in
+## D13: Default window is 60 days; prior-window comparison is explicit
 
-**Decision:** `METRICS_WINDOW_DAYS` defaults to 90 and is what the views display. The
-`direction` axis compares against the prior 90 days, but that second fetch is a
-**user-triggered toggle**, not part of the default load.
+**Decision:** `METRICS_WINDOW_DAYS` defaults to 60 and is what the views display. The
+`direction` axis compares against the prior 60 days when the caller explicitly requests
+that second window.
 
-**Rationale:** Trend buckets are ISO weeks (13 per quarter) — enough points for a legible
-sparkline without weekly noise reading as movement. The prior window is never displayed,
-only compared against, and fetching it doubles the call count on every load (D8). Making
-it opt-in keeps the default load affordable; `direction` reports "not computed" until
-requested, a state the noise-band model already has.
+**Rationale:** Trend buckets are ISO weeks, and 60 days gives roughly nine weekly points:
+enough for a legible prototype chart while making cold live loads less expensive than a
+full quarter. The prior window is never displayed, only compared against, and fetching it
+roughly doubles the call count on every load (D8). The dashboard requests it because the
+direction chip is part of the primary UX; other API consumers can omit it and receive
+"not computed".
 
 **Note:** the third noise gate needs ≥8 prior periods to compute a median absolute
-deviation. Those are the 13 weekly buckets **inside** the displayed window, not stored
+deviation. Those are the weekly buckets **inside** the displayed window, not stored
 history, so that gate works on the default load with no extra fetching.
 
 **Consequence:** where GitHub offers no server-side date filter (releases, pulls),

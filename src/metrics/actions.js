@@ -5,6 +5,7 @@ const { isoWeekBuckets } = require("./window");
 const DEFAULT_CONCURRENCY = 8;
 const REQUIRED_CHECKS_MISSING = "needs_config";
 const REQUIRED_CHECKS_CONFIGURED = "configured";
+const REQUIRED_CHECKS_OBSERVED = "observed_fallback";
 
 async function loadActionsWindow({
   github,
@@ -190,9 +191,9 @@ function buildCiSignals(runs, jobsByRunId, required) {
 
   return sortedRuns.map((run) => {
     const allJobs = jobsByRunId.get(run.id) || [];
-    const requiredJobs = filterRequiredJobs(allJobs, required.names);
+    const requiredJobs = filterJobsForRequiredSet(allJobs, required);
     const matchedNames = new Set(requiredJobs.map((job) => job.name));
-    const allRequiredPresent = required.names.every((name) => matchedNames.has(name));
+    const allRequiredPresent = hasRequiredCoverage(required, requiredJobs, matchedNames);
     const pushAt = Date.parse(run.created_at);
     const firstStarted = minDate(requiredJobs.map((job) => job.started_at));
     const queueSeconds = secondsBetween(run.created_at, run.run_started_at || firstStarted || run.created_at);
@@ -237,6 +238,17 @@ function resolveRequiredChecks(config = {}, runs = [], jobsByRunId = new Map()) 
   const names = Array.isArray(config.requiredChecks) ? config.requiredChecks.filter(Boolean) : [];
   const observed = observedJobNames(runs, jobsByRunId);
   if (names.length === 0) {
+    if (observed.length > 0) {
+      return {
+        state: REQUIRED_CHECKS_OBSERVED,
+        names: observed,
+        match_observed_per_run: true,
+        version: config.requiredCheckSetVersion || "observed-recent-jobs",
+        observed_job_names: observed,
+        required_check_count: observed.length,
+      };
+    }
+
     return {
       state: REQUIRED_CHECKS_MISSING,
       names: [],
@@ -258,6 +270,17 @@ function resolveRequiredChecks(config = {}, runs = [], jobsByRunId = new Map()) 
 function filterRequiredJobs(jobs, requiredNames) {
   const required = new Set(requiredNames);
   return (jobs || []).filter((job) => required.has(job.name));
+}
+
+function filterJobsForRequiredSet(jobs, required) {
+  return required.match_observed_per_run ? jobs || [] : filterRequiredJobs(jobs, required.names);
+}
+
+function hasRequiredCoverage(required, requiredJobs, matchedNames) {
+  if (required.match_observed_per_run) {
+    return requiredJobs.length > 0;
+  }
+  return required.names.every((name) => matchedNames.has(name));
 }
 
 function buildTimeToSignalTrend(signals, window) {
@@ -330,9 +353,9 @@ function ensureGroup(groups, key, run) {
 }
 
 function addAttemptToGroup(group, attempt, required) {
-  const requiredJobs = filterRequiredJobs(attempt.jobs, required.names);
+  const requiredJobs = filterJobsForRequiredSet(attempt.jobs, required);
   const matchedNames = new Set(requiredJobs.map((job) => job.name));
-  const allRequiredPresent = required.names.every((name) => matchedNames.has(name));
+  const allRequiredPresent = hasRequiredCoverage(required, requiredJobs, matchedNames);
   const passed = allRequiredPresent && requiredJobs.every((job) => job.conclusion === "success");
   const failed = requiredJobs.some((job) => job.conclusion === "failure");
 
@@ -415,6 +438,9 @@ function caveatsFor(required, confidence) {
   ];
   if (required.state === REQUIRED_CHECKS_MISSING) {
     caveats.push("required_checks_need_config");
+  }
+  if (required.state === REQUIRED_CHECKS_OBSERVED) {
+    caveats.push("required_checks_observed_jobs_fallback");
   }
   if (confidence < 0.7) {
     caveats.push("insufficient_required_check_coverage");
@@ -590,6 +616,7 @@ function classifyRerunActor(attempt) {
 module.exports = {
   REQUIRED_CHECKS_CONFIGURED,
   REQUIRED_CHECKS_MISSING,
+  REQUIRED_CHECKS_OBSERVED,
   buildCiSignals,
   computeCiReliability,
   computeTimeToSignal,

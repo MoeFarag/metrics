@@ -59,8 +59,8 @@ function getSharedLimitations() {
     "Production deploys are GitHub Releases. If no qualifying releases are detected, DORA release metrics show a no-release state instead of zeros.",
     "Change-failure signals look for labels or terms matching hotfix, incident, bug, and revert, plus explicit Git revert commits where detectable.",
     "Phase one uses live GitHub API reads only. There is no datastore, webhook ingestion, or historical snapshot.",
-    "Direction is omitted until explicitly computed and until the sample clears the noise gates.",
-    "Required-check metrics need a configured required-check list; public repo access alone does not reveal which Actions jobs block merge.",
+    "Direction compares the current 60-day window with the prior 60 days when enough weekly signal is present.",
+    "Required-check metrics use configured branch-protection checks when supplied; otherwise the prototype falls back to observed Actions jobs and marks that caveat.",
   ];
 }
 

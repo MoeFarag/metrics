@@ -6,7 +6,7 @@ const { percentile } = require("./stats");
 const { resolveMetricsWindow } = require("./window");
 
 const HOURS = 60 * 60 * 1000;
-const DEFAULT_WINDOW_DAYS = 30;
+const DEFAULT_WINDOW_DAYS = 60;
 const FAILURE_PATTERN = /\b(hot\s*fix|hotfix|incident|sev[0-9]?|outage|rollback|bug|fix|defect|regression|revert(?:ed|s|ing)?|postmortem|restore)\b/i;
 const NON_FAILURE_FIX_PATTERN = /\b(prefix|suffix|fixture|fixtures|config(?:uration)? fixup|fixup!)\b/i;
 

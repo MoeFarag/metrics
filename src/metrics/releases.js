@@ -4,7 +4,7 @@ const { median } = require("./stats");
 const { isoWeekBuckets, resolveMetricsWindow } = require("./window");
 
 const HOURS = 60 * 60 * 1000;
-const DEFAULT_WINDOW_DAYS = 30;
+const DEFAULT_WINDOW_DAYS = 60;
 
 async function calculateDeploymentFrequency({
   github,

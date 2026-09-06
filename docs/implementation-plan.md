@@ -52,18 +52,18 @@ tension internally — frequency against failure rate — and are always shown t
 
 ### 2.1 Time window
 
-**Default: a rolling quarter — 90 days back from `now`.** Configurable via
-`METRICS_WINDOW_DAYS` (default `90`). Every endpoint below is filtered to this window;
+**Default: a rolling 60 days back from `now`.** Configurable via
+`METRICS_WINDOW_DAYS` (default `60`). Every endpoint below is filtered to this window;
 where GitHub offers no server-side date filter, paginate newest-first and stop on the
 first record older than `window_start` (D13).
 
 Two derived windows are used for reporting:
 
 - **Trend buckets:** ISO weeks, aligned to Monday.
-- **Direction comparison:** the current 90 days against the prior 90 days. Fetching the
-  prior window doubles the call count, so it is a **user-triggered toggle**, not part of
-  the default load (D13). Until requested, `direction` reports `not_computed`.
-  The third noise gate (§2.5) is unaffected — its MAD is computed across the 13 weekly
+- **Direction comparison:** the current 60 days against the prior 60 days. Fetching the
+  prior window roughly doubles the call count, so the frontend explicitly requests it
+  for dashboard loads. Until requested, `direction` reports `not_computed`.
+  The third noise gate (§2.5) is unaffected — its MAD is computed across the weekly
   buckets *inside* the displayed window, so it needs no extra fetching and no history.
 
 ### 2.2 API conventions
@@ -119,8 +119,8 @@ ci_signal[]       head_sha, push_at, first_check_started_at, queue_seconds,
 ### 2.3.1 What a load costs
 
 Live computation is affordable at prototype scale and not beyond it. Rough call counts
-for one cold full refresh over 90 days on a repo doing ~50 releases, ~120 merged PRs,
-and ~600 push-triggered runs per quarter:
+for one cold full refresh over 60 days on a repo doing ~35 releases, ~80 merged PRs,
+and ~400 push-triggered runs:
 
 | Source | Calls | Driver |
 |---|---|---|
@@ -165,9 +165,10 @@ which needs admin scope the prototype token may not have (D14).
 With nothing persisted (D8), a config change silently re-bases the whole displayed
 history — the version on the response is what makes that change noticeable at all.
 
-If no required-check config exists for the selected repo, show the Actions job names
-observed in recent push runs and ask the user to choose which jobs block merge. Do not
-pretend the public API can infer branch protection without sufficient permissions.
+If no required-check config exists for the selected repo, the prototype computes M6/M7
+from observed Actions jobs per run so the cards do not stay pending. The response must
+mark `required_checks_state: "observed_fallback"` and include the observed job names,
+because this is a useful prototype estimate rather than verified branch protection.
 
 ### 2.5 Noise band — no direction is reported unless it clears all three gates
 
@@ -256,7 +257,7 @@ Two axes rather than a single traffic light.
 
 - **Band** — `healthy` (within agreed target range) / `watch` (outside, not materially)
   / `poor` (materially outside).
-- **Direction** — over rolling 90 days vs. prior 90 days, subject to §2.5:
+- **Direction** — over rolling 60 days vs. prior 60 days, subject to §2.5:
   `improving` / `flat` / `degrading`.
 
 Six states. `poor / improving` and `healthy / flat` are both broadly fine and read
@@ -1147,8 +1148,8 @@ task is done when its stated tests pass.
   with it warm must produce byte-identical output (D8).
 - **T3** — Bounded-concurrency fetch pool (default 8) used by every multi-call metric.
   Without it a cold load is minutes of serial requests.
-- **T4** — `src/metrics/window.js`: resolve `METRICS_WINDOW_DAYS` (default 90) into
-  `window_start`, `prior_window_start`, and the 13 ISO week buckets.
+- **T4** — `src/metrics/window.js`: resolve `METRICS_WINDOW_DAYS` (default 60) into
+  `window_start`, `prior_window_start`, and ISO week buckets.
 - **T5** — `src/metrics/stats.js`: `median`, `percentile(p)`, `mad`, and the §2.5
   three-gate direction function. Unit-test this in isolation first — every metric
   depends on it and a percentile off-by-one silently corrupts all seven.
@@ -1182,7 +1183,7 @@ task is done when its stated tests pass.
 
 ### Views
 
-- **T15** — Metrics API: `GET /api/metrics/:name?window=90d` returning the §4 result
+- **T15** — Metrics API: `GET /api/metrics/:name?window=60d` returning the §4 result
   shapes; `GET /api/metrics/summary` returning all seven. Role-gated via the existing
   `src/auth-service.js` — `manager`/`admin` reach Layer 3, `executive`/`admin` reach
   Layer 2.

@@ -55,17 +55,27 @@ test("promise pool propagates worker failures", async () => {
   );
 });
 
-test("metrics window defaults to 30 days and returns prior window plus ISO week buckets", () => {
+test("metrics window defaults to 60 days and returns prior window plus ISO week buckets", () => {
   const result = resolveMetricsWindow({}, new Date("2026-09-06T10:00:00.000Z"));
 
-  assert.equal(result.window_days, 30);
-  assert.equal(result.window_start, "2026-08-07T10:00:00.000Z");
+  assert.equal(result.window_days, 60);
+  assert.equal(result.window_start, "2026-07-08T10:00:00.000Z");
   assert.equal(result.window_end, "2026-09-06T10:00:00.000Z");
-  assert.equal(result.prior_window_start, "2026-07-08T10:00:00.000Z");
-  assert.equal(result.prior_window_end, "2026-08-07T10:00:00.000Z");
+  assert.equal(result.prior_window_start, "2026-05-09T10:00:00.000Z");
+  assert.equal(result.prior_window_end, "2026-07-08T10:00:00.000Z");
   assert.deepEqual(
     result.iso_week_buckets.map((bucket) => bucket.week_start),
-    ["2026-08-03", "2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31"]
+    [
+      "2026-07-06",
+      "2026-07-13",
+      "2026-07-20",
+      "2026-07-27",
+      "2026-08-03",
+      "2026-08-10",
+      "2026-08-17",
+      "2026-08-24",
+      "2026-08-31",
+    ]
   );
 });
 

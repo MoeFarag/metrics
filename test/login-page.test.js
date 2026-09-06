@@ -43,3 +43,14 @@ test("metric visualizations are chosen per metric", () => {
   assert.match(html, /m6: renderTimeToSignal/);
   assert.match(html, /m7: renderCiReliability/);
 });
+
+test("metric labels are human readable and charts expose hover titles", () => {
+  const html = renderLoginPage();
+
+  assert.match(html, /displayLabel\(metric\.direction/);
+  assert.match(html, /Insufficient data/);
+  assert.match(html, /Required checks use observed Actions jobs/);
+  assert.match(html, /<title>/);
+  assert.match(html, /height: 128px;/);
+  assert.doesNotMatch(html, /<strong>Metric<\/strong>/);
+});

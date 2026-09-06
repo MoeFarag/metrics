@@ -27,10 +27,10 @@ test("deployment frequency filters draft prerelease and out-of-window releases",
     now: new Date("2026-09-06T00:00:00.000Z"),
   });
 
-  assert.equal(result.sample_size, 3);
+  assert.equal(result.sample_size, 4);
   assert.deepEqual(
     result.releases.map((item) => item.tag_name),
-    ["v1.0.2", "v1.0.1", "v1.0.0"]
+    ["old", "v1.0.2", "v1.0.1", "v1.0.0"]
   );
   assert.equal(result.data_confidence, 1);
 });

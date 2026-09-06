@@ -6,7 +6,7 @@ const { summarizePullRequestSize } = require("./pr-size");
 const { percentile } = require("./stats");
 const { startOfIsoWeek, resolveMetricsWindow } = require("./window");
 
-const DEFAULT_WINDOW_DAYS = 30;
+const DEFAULT_WINDOW_DAYS = 60;
 const FEEDBACK_BATCH_WINDOW_MS = 60 * 60 * 1000;
 const REVIEW_FEEDBACK_STATES = new Set(["CHANGES_REQUESTED", "COMMENTED"]);
 
