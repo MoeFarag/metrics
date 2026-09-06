@@ -78,6 +78,8 @@ test("metric charts render axes labels and hoverable points", () => {
   const html = renderLoginPage();
 
   assert.match(html, /function chartFrame/);
+  assert.match(html, /preserveAspectRatio="xMidYMid meet"/);
+  assert.doesNotMatch(html, /preserveAspectRatio="none"/);
   assert.match(html, /class="chart-axis"/);
   assert.match(html, /class="chart-label"/);
   assert.match(html, /xLabel: "Weeks"/);

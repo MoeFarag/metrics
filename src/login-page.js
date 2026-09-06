@@ -424,6 +424,7 @@ function renderLoginPage() {
         width: 100%;
         height: 128px;
         display: block;
+        overflow: visible;
       }
 
       .manager-metric-card .metric-visual {
@@ -1319,7 +1320,7 @@ function renderLoginPage() {
       }
 
       function svg(inner, labels = {}) {
-        return '<svg viewBox="0 0 100 62" preserveAspectRatio="none" role="img">' +
+        return '<svg viewBox="0 0 100 62" preserveAspectRatio="xMidYMid meet" role="img">' +
           chartFrame(labels.xLabel || "X axis", labels.yLabel || "Y axis") +
           inner +
           '</svg>';
