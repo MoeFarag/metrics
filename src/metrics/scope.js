@@ -35,7 +35,7 @@ function parseMetricQueryOptions(query = {}, config = {}) {
     metric,
     repo: parseRepo(query.repo || query.repository, config),
     include_prior_window: parseToggle(query.include_prior_window || query.direction, false),
-    window_days: parseWindowDays(query.window || query.window_days, config.metricsWindowDays || 60),
+    window_days: parseWindowDays(query.window || query.window_days, config.metricsWindowDays || 90),
   };
 }
 

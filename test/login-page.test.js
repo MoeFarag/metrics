@@ -7,7 +7,8 @@ test("dashboard view switcher is restricted to admin users", () => {
 
   assert.match(html, /v-if="canSwitchViews" class="view-tabs"/);
   assert.match(html, /canSwitchViews\(\) {\s*return this\.user\?\.role === "admin";\s*}/);
-  assert.match(html, /effectiveView\(\) {\s*return this\.canSwitchViews \? this\.view : "manager";\s*}/);
+  assert.match(html, /return this\.user\?\.role === "executive" \? "executive" : "manager";/);
+  assert.match(html, /this\.view = this\.user\.role === "executive" \? "executive" : "manager";/);
   assert.match(html, /v-if="effectiveView === 'manager'"/);
 });
 

@@ -52,17 +52,18 @@ tension internally — frequency against failure rate — and are always shown t
 
 ### 2.1 Time window
 
-**Default: a rolling 60 days back from `now`.** Configurable via
-`METRICS_WINDOW_DAYS` (default `60`). Every endpoint below is filtered to this window;
+**Default: a rolling 90 days back from `now`.** Configurable via
+`METRICS_WINDOW_DAYS` (default `90`). Every endpoint below is filtered to this window;
 where GitHub offers no server-side date filter, paginate newest-first and stop on the
 first record older than `window_start` (D13).
 
 Two derived windows are used for reporting:
 
 - **Trend buckets:** ISO weeks, aligned to Monday.
-- **Direction comparison:** the current 60 days against the prior 60 days. Fetching the
-  prior window roughly doubles the call count, so the frontend explicitly requests it
-  for dashboard loads. Until requested, `direction` reports `not_computed`.
+- **Direction comparison:** the current 90-day analysis window against the prior 90 days.
+  Fetching the prior window makes the queried span 180 days and roughly doubles the call
+  count, so the frontend explicitly requests it for dashboard loads. Until requested,
+  `direction` reports `not_computed`.
   The third noise gate (§2.5) is unaffected — its MAD is computed across the weekly
   buckets *inside* the displayed window, so it needs no extra fetching and no history.
 
@@ -119,7 +120,7 @@ ci_signal[]       head_sha, push_at, first_check_started_at, queue_seconds,
 ### 2.3.1 What a load costs
 
 Live computation is affordable at prototype scale and not beyond it. Rough call counts
-for one cold full refresh over 60 days on a repo doing ~35 releases, ~80 merged PRs,
+for one cold full refresh over 90 days on a repo doing ~35 releases, ~80 merged PRs,
 and ~400 push-triggered runs:
 
 | Source | Calls | Driver |
@@ -257,7 +258,7 @@ Two axes rather than a single traffic light.
 
 - **Band** — `healthy` (within agreed target range) / `watch` (outside, not materially)
   / `poor` (materially outside).
-- **Direction** — over rolling 60 days vs. prior 60 days, subject to §2.5:
+- **Direction** — over rolling 90 days vs. prior 90 days, subject to §2.5:
   `improving` / `flat` / `degrading`.
 
 Six states. `poor / improving` and `healthy / flat` are both broadly fine and read
@@ -1148,7 +1149,7 @@ task is done when its stated tests pass.
   with it warm must produce byte-identical output (D8).
 - **T3** — Bounded-concurrency fetch pool (default 8) used by every multi-call metric.
   Without it a cold load is minutes of serial requests.
-- **T4** — `src/metrics/window.js`: resolve `METRICS_WINDOW_DAYS` (default 60) into
+- **T4** — `src/metrics/window.js`: resolve `METRICS_WINDOW_DAYS` (default 90) into
   `window_start`, `prior_window_start`, and ISO week buckets.
 - **T5** — `src/metrics/stats.js`: `median`, `percentile(p)`, `mad`, and the §2.5
   three-gate direction function. Unit-test this in isolation first — every metric

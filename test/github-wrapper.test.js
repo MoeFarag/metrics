@@ -34,13 +34,13 @@ test("readConfig parses required and optional env vars", () => {
   assert.deepEqual(config.metricsCache, { enabled: false, ttlMs: 5000 });
 });
 
-test("readConfig defaults metrics window to 60 days", () => {
+test("readConfig defaults metrics window to 90 days", () => {
   const config = readConfig({
     GITHUB_OWNER: "openai",
     GITHUB_REPO: "codex",
   });
 
-  assert.equal(config.metricsWindowDays, 60);
+  assert.equal(config.metricsWindowDays, 90);
 });
 
 test("request attaches GitHub version and auth headers", async () => {

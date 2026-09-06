@@ -904,7 +904,7 @@ function renderLoginPage() {
         "Production deploys are GitHub Releases. If no qualifying releases are detected, DORA release metrics show a no-release state instead of zeros.",
         "Change-failure signals look for labels or terms matching hotfix, incident, bug, and revert, plus explicit Git revert commits where detectable.",
         "Phase one uses live GitHub API reads only. There is no datastore, webhook ingestion, or historical snapshot.",
-        "Direction uses the current 60-day window against the prior 60 days when enough weekly signal is present.",
+        "Direction uses the current 90-day analysis window against the prior 90 days, querying up to 180 days when prior-window comparison is enabled.",
         "Required-check metrics use configured branch-protection checks when supplied; otherwise the prototype falls back to observed Actions jobs and marks that caveat."
       ];
       const metricShells = [
@@ -1003,7 +1003,10 @@ function renderLoginPage() {
             return this.user?.role === "admin";
           },
           effectiveView() {
-            return this.canSwitchViews ? this.view : "manager";
+            if (this.canSwitchViews) {
+              return this.view;
+            }
+            return this.user?.role === "executive" ? "executive" : "manager";
           },
           currentTitle() {
             return this.repoSummary?.repo?.full_name || "Metrics Dashboard Prototype";
@@ -1018,7 +1021,7 @@ function renderLoginPage() {
             return this.effectiveView === "manager" ? "Manager view" : "Executive view";
           },
           windowLabel() {
-            const days = this.repoSummary?.window?.window_days || 60;
+            const days = this.repoSummary?.window?.window_days || 90;
             return days + " days";
           },
           rateLimitLabel() {
@@ -1061,9 +1064,7 @@ function renderLoginPage() {
               }
 
               this.user = body.user;
-              if (!this.canSwitchViews) {
-                this.view = "manager";
-              }
+              this.view = this.user.role === "executive" ? "executive" : "manager";
               this.password = "";
               await this.loadRepoMetrics();
             } catch (error) {
