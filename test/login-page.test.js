@@ -19,3 +19,27 @@ test("application name and limitations layout match the prototype shell", () => 
   assert.match(html, /position: fixed;/);
   assert.match(html, /bottom: 0;/);
 });
+
+test("dashboard cards render metric references loading states and modal details", () => {
+  const html = renderLoginPage();
+
+  assert.match(html, /metricShells = \[/);
+  assert.match(html, /metricRef\(metric\)/);
+  assert.match(html, /class="spinner"/);
+  assert.match(html, /include_prior_window", "true"/);
+  assert.doesNotMatch(html, /window\.alert/);
+  assert.match(html, /class="modal-backdrop"/);
+  assert.match(html, /openBand\(metric\)/);
+});
+
+test("metric visualizations are chosen per metric", () => {
+  const html = renderLoginPage();
+
+  assert.match(html, /m1: renderDeploymentFrequency/);
+  assert.match(html, /m2: renderLeadTime/);
+  assert.match(html, /m3: renderChangeFailureRate/);
+  assert.match(html, /m4: renderPrSize/);
+  assert.match(html, /m5: renderReviewTrips/);
+  assert.match(html, /m6: renderTimeToSignal/);
+  assert.match(html, /m7: renderCiReliability/);
+});

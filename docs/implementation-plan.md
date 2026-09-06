@@ -190,8 +190,10 @@ worse than no signal, because it converts missing data into false reassurance.
 
 ### 2.7 Shared Limitations Note
 
-Every view includes a collapsible limitations panel at the bottom, expanded by default
-for the prototype. It lists the active assumptions and label conventions:
+Every view includes a collapsible limitations panel fixed to the bottom of the viewport,
+expanded by default for the prototype. Content receives enough bottom padding that the
+sticky panel does not cover metric cards. It lists the active assumptions and label
+conventions:
 
 - Production deploys are GitHub Releases. If no qualifying releases are detected for a
   selected repo, M1/M2/M3 render a clear "no releases detected" state instead of zeros.
@@ -203,6 +205,18 @@ for the prototype. It lists the active assumptions and label conventions:
   gates.
 - Required-check metrics need a configured required-check list; public repo access alone
   does not reveal which Actions jobs block merge.
+
+### 2.8 Prototype Card Rendering Contract
+
+Every metric card displays its reference ID (\`M1\` through \`M7\`) next to the metric title.
+All seven cards render as soon as a repository run starts; each card owns its loading
+spinner until the summary response replaces the placeholder shell. The top-right chip is
+reserved for direction (\`improving\`, \`flat\`, \`degrading\`, or insufficient data). The band
+chip is kept in the bottom metadata area and opens a band-definition modal.
+
+The Details control opens an in-page modal rather than a browser alert. It includes the
+metric question, current status, direction, band, sample size, confidence notes, caveats,
+and available evidence counts.
 
 ---
 

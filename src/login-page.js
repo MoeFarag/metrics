@@ -232,6 +232,34 @@ function renderLoginPage() {
         color: #91342a;
       }
 
+      .chip.ready,
+      .chip.elite,
+      .chip.high {
+        border-color: #8fc5ae;
+        background: #eef8f3;
+        color: #23624f;
+      }
+
+      .chip.medium,
+      .chip.flat {
+        border-color: #d4b35f;
+        background: #fff8e6;
+        color: #6f4e00;
+      }
+
+      .chip.improving {
+        border-color: #8fc5ae;
+        background: #eef8f3;
+        color: #23624f;
+      }
+
+      .chip.degrading,
+      .chip.error {
+        border-color: #d9867a;
+        background: #fff1ef;
+        color: #91342a;
+      }
+
       .view-tabs {
         display: inline-grid;
         grid-template-columns: repeat(2, minmax(120px, 1fr));
@@ -270,6 +298,10 @@ function renderLoginPage() {
         padding: 16px;
       }
 
+      .metric-card.loading {
+        position: relative;
+      }
+
       .metric-card h3 {
         margin: 0 0 4px;
         font-size: 17px;
@@ -282,6 +314,25 @@ function renderLoginPage() {
         align-items: flex-start;
         justify-content: space-between;
         gap: 10px;
+      }
+
+      .metric-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .metric-ref {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        min-height: 24px;
+        border-radius: 6px;
+        background: #1e2430;
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 800;
       }
 
       .headline {
@@ -315,11 +366,36 @@ function renderLoginPage() {
         display: block;
       }
 
+      .metric-visual {
+        width: 100%;
+        min-height: 62px;
+        border-radius: 6px;
+        background:
+          linear-gradient(to right, #e6ebf2 1px, transparent 1px),
+          linear-gradient(to top, #e6ebf2 1px, transparent 1px),
+          #f8fafc;
+        background-size: 24px 100%, 100% 24px;
+        overflow: hidden;
+      }
+
+      .metric-visual svg {
+        width: 100%;
+        height: 62px;
+        display: block;
+      }
+
       .metric-footer {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
         font-size: 12px;
+      }
+
+      .band-button {
+        width: max-content;
+        border: 0;
+        padding: 0;
+        background: transparent;
       }
 
       .metric-footer strong {
@@ -346,6 +422,84 @@ function renderLoginPage() {
         width: max-content;
         min-height: 32px;
         font-size: 12px;
+      }
+
+      .loading-panel {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 10px;
+        align-items: center;
+        color: #667085;
+        font-size: 13px;
+      }
+
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border: 3px solid #d8dee8;
+        border-top-color: #2f7f67;
+        border-radius: 999px;
+        animation: spin 0.9s linear infinite;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(15, 23, 42, 0.42);
+      }
+
+      .modal-panel {
+        width: min(640px, 100%);
+        max-height: min(720px, calc(100vh - 40px));
+        overflow: auto;
+        border-radius: 8px;
+        border: 1px solid #d8dee8;
+        background: #ffffff;
+        box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+        padding: 22px;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .modal-header h2 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        line-height: 1.2;
+      }
+
+      .modal-close {
+        min-width: 36px;
+        min-height: 36px;
+        border: 1px solid #c9d0dc;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #303747;
+        font-weight: 900;
+      }
+
+      .detail-list {
+        margin: 16px 0 0;
+        padding-left: 20px;
+        color: #475467;
+      }
+
+      .detail-list li + li {
+        margin-top: 8px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
 
       .limitations {
@@ -472,46 +626,52 @@ function renderLoginPage() {
             </div>
           </section>
 
-          <section v-else-if="repoLoading" class="empty-state" aria-live="polite">
-            <div>
-              <h2>Loading live GitHub data</h2>
-              <p class="muted">Each metric is fetched separately so expensive slices do not block the whole dashboard.</p>
-            </div>
-          </section>
-
           <section v-else class="metric-grid" aria-live="polite">
-            <article v-for="metric in visibleMetrics" :key="metric.id" class="metric-card">
+            <article v-for="metric in visibleMetrics" :key="metric.id" class="metric-card" :class="{ loading: metric.loading }">
               <div class="metric-top">
                 <div>
-                  <h3>{{ metric.name }}</h3>
+                  <div class="metric-title-row">
+                    <span class="metric-ref">{{ metricRef(metric) }}</span>
+                    <h3>{{ metric.name }}</h3>
+                  </div>
                   <div class="muted">{{ metric.family }}<span v-if="metric.pair"> paired with {{ metric.pair.toUpperCase() }}</span></div>
                 </div>
-                <span class="chip" :class="metric.band">{{ metric.band }}</span>
+                <span class="chip" :class="directionClass(metric)">{{ directionLabel(metric) }}</span>
               </div>
 
-              <div class="headline">
+              <div v-if="metric.loading" class="loading-panel">
+                <span class="spinner" aria-hidden="true"></span>
+                <span>Loading live GitHub data</span>
+              </div>
+
+              <div v-else class="headline">
                 <div class="headline-value">{{ metricValue(metric) }}</div>
                 <div class="status-row">
-                  <span class="chip pending">{{ metric.direction }}</span>
                   <span class="chip">{{ confidenceLabel(metric) }}</span>
                 </div>
-                <div class="sparkline" aria-hidden="true" v-html="sparkline(metric)"></div>
+                <div class="metric-visual" aria-hidden="true" v-html="metricVisual(metric)"></div>
                 <p class="muted">{{ metric.note || metric.question }}</p>
               </div>
 
               <div v-if="effectiveView === 'manager'" class="manager-detail">
-                <button class="details-button" type="button" @click="openDetails(metric)">Details</button>
+                <button class="details-button" :disabled="metric.loading" type="button" @click="openDetails(metric)">Details</button>
                 <span>Sample: {{ metric.sample_size ?? 0 }}</span>
                 <span>{{ metric.detail || 'Evidence rows will appear here as each metric engine lands.' }}</span>
               </div>
               <div v-else class="metric-footer">
                 <div>
                   <strong>Band</strong>
-                  <span>{{ metric.band }}</span>
+                  <button class="band-button" type="button" @click="openBand(metric)">
+                    <span class="chip" :class="metric.band">{{ bandLabel(metric.band) }}</span>
+                  </button>
                 </div>
                 <div>
-                  <strong>Direction</strong>
-                  <span>{{ metric.direction }}</span>
+                  <strong>Metric</strong>
+                  <span>{{ metricRef(metric) }}</span>
+                </div>
+                <div>
+                  <strong>Details</strong>
+                  <button class="details-button" :disabled="metric.loading" type="button" @click="openDetails(metric)">Open</button>
                 </div>
               </div>
             </article>
@@ -524,6 +684,21 @@ function renderLoginPage() {
             </ul>
           </details>
         </section>
+
+        <div v-if="modal" class="modal-backdrop" role="dialog" aria-modal="true" @click.self="closeModal">
+          <section class="modal-panel">
+            <div class="modal-header">
+              <div>
+                <h2>{{ modal.title }}</h2>
+                <p class="muted">{{ modal.subtitle }}</p>
+              </div>
+              <button class="modal-close" type="button" aria-label="Close" @click="closeModal">&times;</button>
+            </div>
+            <ul class="detail-list">
+              <li v-for="item in modal.items" :key="item">{{ item }}</li>
+            </ul>
+          </section>
+        </div>
       </section>
 
       <section v-else class="login-screen">
@@ -558,6 +733,15 @@ function renderLoginPage() {
         "Direction is omitted until explicitly computed and until the sample clears the noise gates.",
         "Required-check metrics need a configured required-check list; public repo access alone does not reveal which Actions jobs block merge."
       ];
+      const metricShells = [
+        { id: "m1", name: "Deployment Frequency", family: "DORA", pair: null, question: "How often do changes reach production?" },
+        { id: "m2", name: "Lead Time for Changes", family: "DORA", pair: null, question: "How long does a PR take to reach production?" },
+        { id: "m3", name: "Change Failure Rate", family: "DORA", pair: null, question: "How often do production changes need remediation?" },
+        { id: "m4", name: "PR Size Distribution", family: "Flow", pair: "m5", question: "Are changes small enough to review well?" },
+        { id: "m5", name: "Review Round Trips", family: "Collaboration", pair: "m4", question: "How much back-and-forth happens after review?" },
+        { id: "m6", name: "Time to Signal", family: "CI Platform", pair: "m7", question: "How quickly does CI give useful feedback?" },
+        { id: "m7", name: "Rerun Rate & First-Attempt Pass Rate", family: "CI Platform", pair: "m6", question: "How stable is the required check path?" }
+      ];
 
       createApp({
         data() {
@@ -566,6 +750,7 @@ function renderLoginPage() {
             loading: false,
             limitations: fallbackLimitations,
             metrics: [],
+            modal: null,
             password: "",
             repoAddress: defaultRepoAddress,
             repoError: "",
@@ -585,10 +770,16 @@ function renderLoginPage() {
             return titleCase(this.user.username || this.user.role);
           },
           visibleMetrics() {
+            const metrics = this.metrics.length ? this.metrics : metricShells.map((metric) => ({
+              ...metric,
+              loading: true,
+              band: "pending",
+              direction: "pending"
+            }));
             if (this.effectiveView === "executive") {
-              return this.metrics.filter((metric) => ["m1", "m2", "m3", "m4", "m5", "m6", "m7"].includes(metric.id));
+              return metrics.filter((metric) => ["m1", "m2", "m3", "m4", "m5", "m6", "m7"].includes(metric.id));
             }
-            return this.metrics;
+            return metrics;
           },
           canSwitchViews() {
             return this.user?.role === "admin";
@@ -660,10 +851,17 @@ function renderLoginPage() {
           async loadRepoMetrics() {
             this.repoError = "";
             this.repoLoading = true;
+            this.metrics = metricShells.map((metric) => ({
+              ...metric,
+              loading: true,
+              band: "pending",
+              direction: "pending"
+            }));
 
             try {
               const url = new URL("/api/metrics/summary", window.location.origin);
               url.searchParams.set("repo", this.repoAddress);
+              url.searchParams.set("include_prior_window", "true");
               const response = await fetch(url);
               const body = await response.json();
               if (!response.ok) {
@@ -671,7 +869,7 @@ function renderLoginPage() {
               }
 
               this.repoSummary = body;
-              this.metrics = body.metrics || [];
+              this.metrics = (body.metrics || []).map((metric) => ({ ...metric, loading: false }));
               this.limitations = body.limitations || fallbackLimitations;
               if (body.repo?.html_url) {
                 this.repoAddress = body.repo.html_url;
@@ -695,8 +893,12 @@ function renderLoginPage() {
             this.repoLoading = false;
             this.repoSummary = null;
             this.metrics = [];
+            this.modal = null;
             this.user = null;
             this.username = "";
+          },
+          metricRef(metric) {
+            return String(metric.id || "").toUpperCase();
           },
           metricValue(metric) {
             if (metric.headline?.value !== undefined) {
@@ -726,24 +928,206 @@ function renderLoginPage() {
             return "Pending";
           },
           confidenceLabel(metric) {
+            if (metric.loading) {
+              return "Loading";
+            }
             if (metric.data_confidence === null || metric.data_confidence === undefined) {
               return "Confidence pending";
             }
             return Math.round(metric.data_confidence * 100) + "% confidence";
           },
-          sparkline(metric) {
-            const points = Array.isArray(metric.trend) && metric.trend.length
-              ? metric.trend.map((_, index) => 38 - ((index % 5) * 7))
-              : [34, 30, 32, 24, 26, 18, 20, 16];
-            const step = 100 / Math.max(points.length - 1, 1);
-            const path = points.map((y, index) => (index === 0 ? "M" : "L") + (index * step).toFixed(1) + " " + y).join(" ");
-            return '<svg viewBox="0 0 100 44" preserveAspectRatio="none"><path d="' + path + '" fill="none" stroke="#2f7f67" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>';
+          directionLabel(metric) {
+            return titleCase(metric.direction || "pending").replace(/_/g, " ");
+          },
+          directionClass(metric) {
+            const direction = metric.direction || "pending";
+            return direction === "not_computed" || direction === "insufficient_data" ? "pending" : direction;
+          },
+          bandLabel(band) {
+            return titleCase(band || "pending");
+          },
+          metricVisual(metric) {
+            const renderers = {
+              m1: renderDeploymentFrequency,
+              m2: renderLeadTime,
+              m3: renderChangeFailureRate,
+              m4: renderPrSize,
+              m5: renderReviewTrips,
+              m6: renderTimeToSignal,
+              m7: renderCiReliability,
+            };
+            return (renderers[metric.id] || renderGenericVisual)(metric);
           },
           openDetails(metric) {
-            window.alert(metric.name + "\\n" + (metric.note || metric.question || "Details pending."));
+            this.modal = {
+              title: this.metricRef(metric) + " - " + metric.name,
+              subtitle: metric.question || "Metric detail",
+              items: detailItems(metric),
+            };
+          },
+          openBand(metric) {
+            this.modal = {
+              title: this.metricRef(metric) + " band: " + this.bandLabel(metric.band),
+              subtitle: "Band definitions are directional targets, not absolute performance labels.",
+              items: bandItems(metric),
+            };
+          },
+          closeModal() {
+            this.modal = null;
           },
         },
       }).mount("#app");
+
+      function detailItems(metric) {
+        const items = [
+          metric.note || metric.question || "Details pending.",
+          "Status: " + titleCase(metric.status || "ok").replace(/_/g, " "),
+          "Direction: " + titleCase(metric.direction || "pending").replace(/_/g, " "),
+          "Band: " + titleCase(metric.band || "pending"),
+          "Sample: " + (metric.sample_size ?? 0),
+        ];
+        if (metric.confidence_note) items.push(metric.confidence_note);
+        if (Array.isArray(metric.caveats)) items.push(...metric.caveats.slice(0, 4));
+        if (Array.isArray(metric.low_confidence_reasons)) items.push(...metric.low_confidence_reasons.slice(0, 4));
+        if (Array.isArray(metric.notes)) items.push(...metric.notes.slice(0, 4));
+        if (Array.isArray(metric.evidence_rows) && metric.evidence_rows.length) {
+          items.push("Evidence rows available: " + metric.evidence_rows.length);
+        }
+        return [...new Set(items.filter(Boolean))];
+      }
+
+      function bandItems(metric) {
+        const definitions = {
+          elite: "Elite: top target band for this metric.",
+          high: "High: healthy but still worth watching for drift.",
+          medium: "Medium: mixed signal; read the supporting trend and confidence.",
+          low: "Low: needs attention or has low confidence.",
+          ready: "Ready: enough data is present, but no calibrated target band exists yet.",
+          pending: "Pending: the metric is still loading or lacks enough data.",
+        };
+        return [
+          definitions[metric.band] || definitions.pending,
+          "Deployment Frequency: higher deploys per week is better.",
+          "Lead Time, Change Failure Rate, PR Size, Review Trips, and Time to Signal: lower is better.",
+          "CI Reliability: higher first-attempt pass rate and lower rerun rate are better.",
+        ];
+      }
+
+      function renderDeploymentFrequency(metric) {
+        const releases = Array.isArray(metric.releases) ? metric.releases : [];
+        if (releases.length) {
+          const ticks = releases.slice(-16).map((release, index, rows) => {
+            const x = 8 + (index * 84) / Math.max(rows.length - 1, 1);
+            return '<line x1="' + x + '" y1="14" x2="' + x + '" y2="48" stroke="#2f7f67" stroke-width="3"/>';
+          }).join("");
+          return svg(ticks + '<line x1="6" y1="48" x2="94" y2="48" stroke="#cbd5e1" stroke-width="2"/>');
+        }
+        return renderGenericVisual(metric);
+      }
+
+      function renderLeadTime(metric) {
+        const trend = Array.isArray(metric.trend) ? metric.trend : [];
+        const p50 = trend.map((row) => row.p50_hours ?? row.p50).filter(isFiniteNumber);
+        const p85 = trend.map((row) => row.p85_hours ?? row.p85).filter(isFiniteNumber);
+        return svg(
+          linePath(p85, "#9db7cc", 2, 18) +
+          linePath(p50.length ? p50 : sampleValues(metric), "#2f7f67", 3, 30)
+        );
+      }
+
+      function renderChangeFailureRate(metric) {
+        const releases = Array.isArray(metric.releases) ? metric.releases : [];
+        if (releases.length) {
+          return svg(releases.slice(-18).map((release, index, rows) => {
+            const x = 6 + (index * 88) / Math.max(rows.length - 1, 1);
+            const color = release.failed ? "#a3332a" : release.signals?.length ? "#2f7f67" : "#98a2b3";
+            return '<circle cx="' + x + '" cy="30" r="4" fill="' + color + '"/>';
+          }).join(""));
+        }
+        return renderGenericVisual(metric);
+      }
+
+      function renderPrSize(metric) {
+        const p = metric.percentiles_lines || {};
+        const values = [p.p50, p.p75, p.p90].filter(isFiniteNumber);
+        if (!values.length) return renderGenericVisual(metric);
+        const max = Math.max(...values, 1);
+        const bars = values.map((value, index) => {
+          const width = Math.max(8, (value / max) * 76);
+          const y = 14 + index * 14;
+          return '<line x1="12" y1="' + y + '" x2="' + (12 + width) + '" y2="' + y + '" stroke="#2f7f67" stroke-width="6" stroke-linecap="round"/>';
+        }).join("");
+        const threshold = metric.headline?.threshold_lines ? '<line x1="82" y1="8" x2="82" y2="54" stroke="#a3332a" stroke-width="2" stroke-dasharray="3 3"/>' : "";
+        return svg(bars + threshold);
+      }
+
+      function renderReviewTrips(metric) {
+        const distribution = metric.distribution || {};
+        const entries = ["0", "1", "2", "3+"].map((key) => Number(distribution[key] || 0));
+        const max = Math.max(...entries, 1);
+        return svg(entries.map((value, index) => {
+          const height = Math.max(4, (value / max) * 42);
+          const x = 14 + index * 20;
+          const color = index >= 3 ? "#a3332a" : "#2f7f67";
+          return '<rect x="' + x + '" y="' + (54 - height) + '" width="12" height="' + height + '" rx="2" fill="' + color + '"/>';
+        }).join(""));
+      }
+
+      function renderTimeToSignal(metric) {
+        const red = metric.headline?.time_to_red_p50_seconds;
+        const green = metric.headline?.time_to_green_p50_seconds;
+        const max = Math.max(Number(red) || 1, Number(green) || 1);
+        const redWidth = Math.max(8, ((Number(red) || 0) / max) * 72);
+        const greenWidth = Math.max(8, ((Number(green) || 0) / max) * 72);
+        return svg(
+          '<rect x="12" y="16" width="' + redWidth + '" height="10" rx="3" fill="#a3332a"/>' +
+          '<rect x="12" y="38" width="' + greenWidth + '" height="10" rx="3" fill="#2f7f67"/>'
+        );
+      }
+
+      function renderCiReliability(metric) {
+        const pass = Number(metric.headline?.first_attempt_pass_rate_pct) || 0;
+        const rerun = Number(metric.headline?.rerun_rate_pct) || 0;
+        const passWidth = Math.max(4, Math.min(88, pass * 0.88));
+        const rerunWidth = Math.max(4, Math.min(88, rerun * 0.88));
+        return svg(
+          '<rect x="8" y="14" width="' + passWidth + '" height="12" rx="3" fill="#2f7f67"/>' +
+          '<rect x="8" y="38" width="' + rerunWidth + '" height="12" rx="3" fill="#d4b35f"/>'
+        );
+      }
+
+      function renderGenericVisual(metric) {
+        return svg(linePath(sampleValues(metric), "#2f7f67", 3, 30));
+      }
+
+      function svg(inner) {
+        return '<svg viewBox="0 0 100 62" preserveAspectRatio="none">' + inner + '</svg>';
+      }
+
+      function linePath(values, color, width, fallbackBase) {
+        const points = values.length ? values : [fallbackBase, fallbackBase - 8, fallbackBase - 3, fallbackBase - 14, fallbackBase - 10];
+        const max = Math.max(...points, 1);
+        const min = Math.min(...points, 0);
+        const span = Math.max(max - min, 1);
+        const step = 88 / Math.max(points.length - 1, 1);
+        const path = points.map((value, index) => {
+          const x = 6 + index * step;
+          const y = 52 - ((value - min) / span) * 40;
+          return (index === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1);
+        }).join(" ");
+        return '<path d="' + path + '" fill="none" stroke="' + color + '" stroke-width="' + width + '" vector-effect="non-scaling-stroke"/>';
+      }
+
+      function sampleValues(metric) {
+        if (Array.isArray(metric.trend) && metric.trend.length) {
+          return metric.trend.map((row, index) => Number(row.value ?? row.count ?? row.p50 ?? row.p90 ?? index + 1)).filter(isFiniteNumber);
+        }
+        return [6, 10, 8, 14, 12, 18, 15];
+      }
+
+      function isFiniteNumber(value) {
+        return Number.isFinite(Number(value));
+      }
 
       function titleCase(value) {
         return String(value || "")

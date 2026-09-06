@@ -192,13 +192,70 @@ function normalizeMetric(id, result, registryById) {
     question: meta.question,
     status: result.state || "ok",
     band: result.headline?.band || bandForConfidence(dataConfidence),
-    direction: result.direction || "not_computed",
+    direction: computedDirection(id, result),
     sample_size: result.sample_size ?? null,
     data_confidence: dataConfidence,
     note: buildNote(result),
     ...result,
     data_confidence: dataConfidence,
   };
+}
+
+function computedDirection(id, result) {
+  if (result.direction && result.direction !== "not_computed") {
+    return result.direction;
+  }
+
+  const trend = Array.isArray(result.trend) ? result.trend : [];
+  if (trend.length < 2) {
+    return result.direction || "insufficient_data";
+  }
+
+  const fieldsByMetric = {
+    m1: { field: "deploys_per_week", fallback: "count", higherIsBetter: true },
+    m2: { field: "p50_hours", fallback: "p50", higherIsBetter: false },
+    m3: { field: "cfr_pct", fallback: "value_pct", higherIsBetter: false },
+    m4: { field: "p90", fallback: "p75", higherIsBetter: false },
+    m5: { field: "p50", fallback: "mean", higherIsBetter: false },
+    m6: { field: "red_p50", fallback: "green_p50", higherIsBetter: false },
+    m7: { field: "first_pass_pct", fallback: "rerun_pct", higherIsBetter: true },
+  };
+  const spec = fieldsByMetric[id];
+  if (!spec) return result.direction || "insufficient_data";
+
+  const first = firstNumeric(trend, spec.field, spec.fallback);
+  const last = lastNumeric(trend, spec.field, spec.fallback);
+  if (!Number.isFinite(first) || !Number.isFinite(last)) {
+    return result.direction || "insufficient_data";
+  }
+
+  const delta = last - first;
+  const threshold = Math.max(Math.abs(first) * 0.05, 0.01);
+  if (Math.abs(delta) <= threshold) return "flat";
+  const movedUp = delta > 0;
+  return spec.higherIsBetter === movedUp ? "improving" : "degrading";
+}
+
+function firstNumeric(rows, primary, fallback) {
+  for (const row of rows) {
+    const value = numericField(row, primary, fallback);
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function lastNumeric(rows, primary, fallback) {
+  for (const row of [...rows].reverse()) {
+    const value = numericField(row, primary, fallback);
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function numericField(row, primary, fallback) {
+  const value = row?.[primary] ?? row?.[fallback];
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function pendingMetric(id, registryById) {
