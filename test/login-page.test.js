@@ -24,12 +24,31 @@ test("dashboard cards render metric references loading states and modal details"
   const html = renderLoginPage();
 
   assert.match(html, /metricShells = \[/);
+  assert.match(html, /metricPlans = {/);
   assert.match(html, /metricRef\(metric\)/);
   assert.match(html, /class="spinner"/);
   assert.match(html, /include_prior_window", "true"/);
   assert.doesNotMatch(html, /window\.alert/);
   assert.match(html, /class="modal-backdrop"/);
   assert.match(html, /openBand\(metric\)/);
+  assert.match(html, /openInfo\(metric\)/);
+  assert.match(html, /More info/);
+});
+
+test("manager and executive views use separate metric layouts", () => {
+  const html = renderLoginPage();
+
+  assert.match(html, /manager-metric-grid/);
+  assert.match(html, /manager-metric-card/);
+  assert.match(html, /min-height: 440px;/);
+  assert.match(html, /font-size: 60px;/);
+  assert.match(html, /height: 256px;/);
+  assert.match(html, /executive-metric-grid/);
+  assert.match(html, /executive-metric-card/);
+  assert.match(html, /class="executive-report"/);
+  assert.match(html, /What it means/);
+  assert.match(html, /metricReport\(metric\)\.definition/);
+  assert.match(html, /metricReport\(metric\)\.calculation/);
 });
 
 test("metric visualizations are chosen per metric", () => {

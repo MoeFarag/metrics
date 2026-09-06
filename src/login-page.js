@@ -287,6 +287,16 @@ function renderLoginPage() {
         gap: 12px;
       }
 
+      .metric-grid.manager-metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .metric-grid.executive-metric-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+
       .metric-card {
         min-height: 220px;
         display: grid;
@@ -298,6 +308,20 @@ function renderLoginPage() {
         padding: 16px;
       }
 
+      .metric-card.manager-metric-card {
+        min-height: 440px;
+        gap: 18px;
+        padding: 24px;
+      }
+
+      .metric-card.executive-metric-card {
+        min-height: 220px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-rows: 1fr;
+        gap: 20px;
+        align-items: stretch;
+      }
+
       .metric-card.loading {
         position: relative;
       }
@@ -307,6 +331,20 @@ function renderLoginPage() {
         font-size: 17px;
         line-height: 1.25;
         letter-spacing: 0;
+      }
+
+      .manager-metric-card h3 {
+        font-size: 24px;
+      }
+
+      .executive-metric-card h3 {
+        font-size: 20px;
+      }
+
+      .metric-primary {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 14px;
       }
 
       .metric-top {
@@ -348,6 +386,10 @@ function renderLoginPage() {
         letter-spacing: 0;
       }
 
+      .manager-metric-card .headline-value {
+        font-size: 60px;
+      }
+
       .sparkline {
         width: 100%;
         height: 44px;
@@ -382,6 +424,43 @@ function renderLoginPage() {
         width: 100%;
         height: 128px;
         display: block;
+      }
+
+      .manager-metric-card .metric-visual {
+        min-height: 256px;
+      }
+
+      .manager-metric-card .metric-visual svg {
+        height: 256px;
+      }
+
+      .executive-report {
+        display: grid;
+        align-content: start;
+        gap: 12px;
+        border-left: 1px solid #d8dee8;
+        padding-left: 20px;
+        color: #475467;
+      }
+
+      .executive-report h4 {
+        margin: 0;
+        color: #303747;
+        font-size: 15px;
+        line-height: 1.25;
+        letter-spacing: 0;
+      }
+
+      .executive-report p {
+        margin: 0;
+        line-height: 1.45;
+      }
+
+      .executive-report-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
       }
 
       .chart-point,
@@ -452,6 +531,13 @@ function renderLoginPage() {
         width: max-content;
         min-height: 32px;
         font-size: 12px;
+      }
+
+      .manager-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
       }
 
       .loading-panel {
@@ -588,8 +674,20 @@ function renderLoginPage() {
           justify-content: flex-start;
         }
 
-        .metric-grid {
+        .metric-grid,
+        .metric-grid.manager-metric-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .metric-card.executive-metric-card {
+          grid-template-columns: 1fr;
+        }
+
+        .executive-report {
+          border-left: 0;
+          border-top: 1px solid #d8dee8;
+          padding-left: 0;
+          padding-top: 16px;
         }
       }
 
@@ -598,7 +696,8 @@ function renderLoginPage() {
           grid-template-columns: 1fr;
         }
 
-        .metric-grid {
+        .metric-grid,
+        .metric-grid.manager-metric-grid {
           grid-template-columns: 1fr;
         }
 
@@ -656,48 +755,61 @@ function renderLoginPage() {
             </div>
           </section>
 
-          <section v-else class="metric-grid" aria-live="polite">
-            <article v-for="metric in visibleMetrics" :key="metric.id" class="metric-card" :class="{ loading: metric.loading }">
-              <div class="metric-top">
-                <div>
-                  <div class="metric-title-row">
-                    <span class="metric-ref">{{ metricRef(metric) }}</span>
-                    <h3>{{ metric.name }}</h3>
+          <section v-else class="metric-grid" :class="effectiveView + '-metric-grid'" aria-live="polite">
+            <article v-for="metric in visibleMetrics" :key="metric.id" class="metric-card" :class="[effectiveView + '-metric-card', { loading: metric.loading }]">
+              <div class="metric-primary">
+                <div class="metric-top">
+                  <div>
+                    <div class="metric-title-row">
+                      <span class="metric-ref">{{ metricRef(metric) }}</span>
+                      <h3>{{ metric.name }}</h3>
+                    </div>
+                    <div class="muted">{{ metric.family }}<span v-if="metric.pair"> paired with {{ metric.pair.toUpperCase() }}</span></div>
                   </div>
-                  <div class="muted">{{ metric.family }}<span v-if="metric.pair"> paired with {{ metric.pair.toUpperCase() }}</span></div>
+                  <span class="chip" :class="directionClass(metric)">{{ directionLabel(metric) }}</span>
                 </div>
-                <span class="chip" :class="directionClass(metric)">{{ directionLabel(metric) }}</span>
-              </div>
 
-              <div v-if="metric.loading" class="loading-panel">
-                <span class="spinner" aria-hidden="true"></span>
-                <span>Loading live GitHub data</span>
-              </div>
-
-              <div v-else class="headline">
-                <div class="headline-value">{{ metricValue(metric) }}</div>
-                <div class="status-row">
-                  <span class="chip">{{ confidenceLabel(metric) }}</span>
+                <div v-if="metric.loading" class="loading-panel">
+                  <span class="spinner" aria-hidden="true"></span>
+                  <span>Loading live GitHub data</span>
                 </div>
-                <div class="metric-visual" v-html="metricVisual(metric)"></div>
-                <p class="muted">{{ metricNote(metric) }}</p>
+
+                <div v-else class="headline">
+                  <div class="headline-value">{{ metricValue(metric) }}</div>
+                  <div class="status-row">
+                    <span class="chip">{{ confidenceLabel(metric) }}</span>
+                  </div>
+                  <div class="metric-visual" v-html="metricVisual(metric)"></div>
+                  <p class="muted">{{ metricNote(metric) }}</p>
+                </div>
               </div>
 
               <div v-if="effectiveView === 'manager'" class="manager-detail">
-                <button class="details-button" :disabled="metric.loading" type="button" @click="openDetails(metric)">Details</button>
+                <div class="manager-actions">
+                  <button class="details-button" :disabled="metric.loading" type="button" @click="openDetails(metric)">Details</button>
+                  <button class="details-button" :disabled="metric.loading" type="button" @click="openInfo(metric)">More info</button>
+                </div>
                 <span>Sample: {{ metric.sample_size ?? 0 }}</span>
-                <span>{{ metric.detail || 'Evidence rows will appear here as each metric engine lands.' }}</span>
+                <span>{{ metric.detail || 'Evidence rows appear here as each metric engine lands.' }}</span>
               </div>
-              <div v-else class="metric-footer">
+              <div v-else class="executive-report">
                 <div>
-                  <strong>Band</strong>
+                  <h4>What it means</h4>
+                  <p>{{ metricReport(metric).meaning }}</p>
+                </div>
+                <div>
+                  <h4>Definition</h4>
+                  <p>{{ metricReport(metric).definition }}</p>
+                </div>
+                <div>
+                  <h4>Calculation</h4>
+                  <p>{{ metricReport(metric).calculation }}</p>
+                </div>
+                <div class="executive-report-actions">
                   <button class="band-button" type="button" @click="openBand(metric)">
                     <span class="chip" :class="metric.band">{{ bandLabel(metric.band) }}</span>
                   </button>
-                </div>
-                <div>
-                  <strong>Details</strong>
-                  <button class="details-button" :disabled="metric.loading" type="button" @click="openDetails(metric)">Open</button>
+                  <button class="details-button" :disabled="metric.loading" type="button" @click="openInfo(metric)">More info</button>
                 </div>
               </div>
             </article>
@@ -768,6 +880,43 @@ function renderLoginPage() {
         { id: "m6", name: "Time to Signal", family: "CI Platform", pair: "m7", question: "How quickly does CI give useful feedback?" },
         { id: "m7", name: "Rerun Rate & First-Attempt Pass Rate", family: "CI Platform", pair: "m6", question: "How stable is the required check path?" }
       ];
+      const metricPlans = {
+        m1: {
+          definition: "Deployment Frequency counts published, non-draft, non-prerelease GitHub Releases in the measurement window.",
+          calculation: "Bucket kept releases by ISO week, then report the median weekly deploy count. Inter-release gap p50 and p85 are kept as supporting context.",
+          meaning: "Shows whether production changes are flowing regularly. The gap distribution matters because a burst of releases can hide long quiet periods."
+        },
+        m2: {
+          definition: "Lead Time for Changes measures PR-open to release-published time for merged PRs whose merge commits appear in a release window.",
+          calculation: "Join release commit lists to merged PR merge_commit_sha values, calculate release published time minus PR created time, then report median and p85 lead time.",
+          meaning: "Shows how long accepted work waits before it is actually in production. Long tails point to stuck review, batching, or release delays."
+        },
+        m3: {
+          definition: "Change Failure Rate measures the share of releases that need remediation, based on revert commits, incident or bug issues, and hotfix or revert PR labels.",
+          calculation: "Mark each release failed if any failure signal applies, then report failed releases divided by total releases as a rolling four-week percentage.",
+          meaning: "Shows whether shipping speed is creating production rework. Label coverage is mandatory because an unlabeled quarter must not look like a clean 0% failure rate."
+        },
+        m4: {
+          definition: "PR Size Distribution measures the filtered lines changed in merged pull requests. It is a batch-size metric, not an effort or output metric.",
+          calculation: "Fetch files for each merged PR, apply published path exclusions, exclude reverts from the distribution, then report p50, p75, p90, and the share above the large-change threshold.",
+          meaning: "Shows whether changes are small enough to review well. It should be read with M5 so smaller PRs do not simply move waiting time into review cycles."
+        },
+        m5: {
+          definition: "Review Round Trips counts human review-then-revise cycles before merge. It measures rework in the review loop, not reviewer diligence.",
+          calculation: "Order human review events and branch commits for each merged PR, count review events followed by at least one commit before merge, then report the distribution and p50.",
+          meaning: "Shows where requirements, design, or implementation clarity is breaking down. High round trips usually indicate unclear requirements or a missing design review stage."
+        },
+        m6: {
+          definition: "Time to Signal measures how quickly required CI checks return useful red or green feedback after a push-triggered workflow run starts.",
+          calculation: "Use workflow run creation time as push_at, include queue time, then report p50 and p90 time to first failing required job and time until all required jobs pass.",
+          meaning: "Shows whether developers get feedback before they context-switch. The queue/execution split helps separate runner capacity problems from slow test problems."
+        },
+        m7: {
+          definition: "Rerun Rate and First-Attempt Pass Rate measure whether CI results are trustworthy on unchanged commits.",
+          calculation: "Group workflow attempts by workflow_id and head_sha, count groups with reruns, and calculate the share of commits whose required checks passed on attempt one.",
+          meaning: "Shows whether teams trust CI. Reruns are a frustration signal, while first-attempt pass rate is the executive-legible quality signal."
+        }
+      };
 
       createApp({
         data() {
@@ -987,11 +1136,26 @@ function renderLoginPage() {
             };
             return (renderers[metric.id] || renderGenericVisual)(metric);
           },
+          metricReport(metric) {
+            return metricPlan(metric);
+          },
           openDetails(metric) {
             this.modal = {
               title: this.metricRef(metric) + " - " + metric.name,
-              subtitle: metric.question || "Metric detail",
+              subtitle: metric.question || "Metric details",
               items: detailItems(metric),
+            };
+          },
+          openInfo(metric) {
+            const plan = metricPlan(metric);
+            this.modal = {
+              title: this.metricRef(metric) + " - " + metric.name + " definition",
+              subtitle: metric.question || "Definition and calculation method",
+              items: [
+                "Definition: " + plan.definition,
+                "Calculation: " + plan.calculation,
+                "What it means: " + plan.meaning,
+              ],
             };
           },
           openBand(metric) {
@@ -1029,6 +1193,14 @@ function renderLoginPage() {
           items.push("Evidence rows available: " + metric.evidence_rows.length);
         }
         return [...new Set(items.filter(Boolean))];
+      }
+
+      function metricPlan(metric) {
+        return metricPlans[metric.id] || {
+          definition: metric.question || "Definition pending.",
+          calculation: "Calculation method pending.",
+          meaning: "Interpretation guidance pending."
+        };
       }
 
       function bandItems(metric) {
