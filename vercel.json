@@ -1,18 +1,4 @@
 {
-  "functions": {
-    "api/github/[...path].js": {
-      "runtime": "nodejs22.x"
-    },
-    "api/index.js": {
-      "runtime": "nodejs22.x"
-    },
-    "api/login.js": {
-      "runtime": "nodejs22.x"
-    },
-    "api/webhooks/github.js": {
-      "runtime": "nodejs22.x"
-    }
-  },
   "rewrites": [
     {
       "source": "/",
