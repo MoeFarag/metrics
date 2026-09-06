@@ -7,6 +7,10 @@
     {
       "source": "/api/github/:path*",
       "destination": "/api/github/[...path].js"
+    },
+    {
+      "source": "/api/metrics/:path*",
+      "destination": "/api/metrics/[...path].js"
     }
   ]
 }
