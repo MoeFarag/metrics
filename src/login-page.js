@@ -450,7 +450,7 @@ function renderLoginPage() {
             </div>
           </div>
 
-          <div class="view-tabs" role="tablist" aria-label="Dashboard view">
+          <div v-if="canSwitchViews" class="view-tabs" role="tablist" aria-label="Dashboard view">
             <button type="button" :class="{ active: view === 'manager' }" @click="view = 'manager'">Manager</button>
             <button type="button" :class="{ active: view === 'executive' }" @click="view = 'executive'">Executive</button>
           </div>
@@ -489,7 +489,7 @@ function renderLoginPage() {
                 <p class="muted">{{ metric.note || metric.question }}</p>
               </div>
 
-              <div v-if="view === 'manager'" class="manager-detail">
+              <div v-if="effectiveView === 'manager'" class="manager-detail">
                 <button class="details-button" type="button" @click="openDetails(metric)">Details</button>
                 <span>Sample: {{ metric.sample_size ?? 0 }}</span>
                 <span>{{ metric.detail || 'Evidence rows will appear here as each metric engine lands.' }}</span>
@@ -575,10 +575,16 @@ function renderLoginPage() {
             return titleCase(this.user.username || this.user.role);
           },
           visibleMetrics() {
-            if (this.view === "executive") {
+            if (this.effectiveView === "executive") {
               return this.metrics.filter((metric) => ["m1", "m2", "m3", "m4", "m5", "m6", "m7"].includes(metric.id));
             }
             return this.metrics;
+          },
+          canSwitchViews() {
+            return this.user?.role === "admin";
+          },
+          effectiveView() {
+            return this.canSwitchViews ? this.view : "manager";
           },
           currentTitle() {
             return this.repoSummary?.repo?.full_name || "Metrics prototype";
@@ -590,7 +596,7 @@ function renderLoginPage() {
             return "Default branch " + this.repoSummary.repo.default_branch + " · computed " + formatTime(this.repoSummary.computed_at);
           },
           selectedViewLabel() {
-            return this.view === "manager" ? "Manager view" : "Executive view";
+            return this.effectiveView === "manager" ? "Manager view" : "Executive view";
           },
           windowLabel() {
             const days = this.repoSummary?.window?.window_days || 30;
@@ -630,6 +636,9 @@ function renderLoginPage() {
               }
 
               this.user = body.user;
+              if (!this.canSwitchViews) {
+                this.view = "manager";
+              }
               this.password = "";
               await this.loadRepoMetrics();
             } catch (error) {
