@@ -12,6 +12,9 @@ Everything deliberately excluded from this build is in `future-plan.md`.
 ## 1. Scope
 
 **Seven metrics. Three DORA, four non-DORA. One source: the GitHub REST API.**
+The user enters a public GitHub repository URL in the frontend; the backend parses and
+normalises it, then runs the metrics through the same GitHub wrapper. The configured
+`GITHUB_OWNER` / `GITHUB_REPO` values are only defaults for initial load and smoke tests.
 
 | # | Metric | Family | GitHub surface | Pair |
 |---|---|---|---|---|
@@ -32,8 +35,9 @@ dependency is called out explicitly and displayed as a confidence figure rather 
 hidden (D9).
 
 **Deliberately out of scope for the prototype:** Failed Deployment Recovery Time and
-Deployment Rework Rate (the other two DORA metrics) — see `future-plan.md` §2 for why
-and what would have to be true first.
+Deployment Rework Rate (the other two DORA metrics), datastore-backed history, and
+webhook subscription setup — see `future-plan.md` §2 for why and what would have to be
+true first.
 
 ### Pairing rule
 
@@ -65,7 +69,9 @@ Two derived windows are used for reporting:
 ### 2.2 API conventions
 
 - Header: `X-GitHub-Api-Version: 2022-11-28`; `Accept: application/vnd.github+json`.
-- Auth: `GITHUB_TOKEN` (PAT or App token). Budget 5,000 req/hr.
+- Auth: `GITHUB_TOKEN` (PAT or App token). Phase one uses a read-only token for public
+  repositories. Budget 5,000 req/hr. The dashboard can technically call public endpoints
+  without a token, but the unauthenticated 60 req/hr budget is too small for this plan.
 - Pagination: `per_page=100`, follow the `Link` header — never guess page counts.
 - **Computed live on every load — no database, no ingest job, no event history** (D8).
   Every metric here is a pure function of the repo's current API state over the window;
@@ -141,9 +147,10 @@ Three consequences, all mandatory:
    the remaining budget in the UI. Failing a page load halfway through a 1,200-call fan-out
    with no explanation is the worst possible prototype experience.
 
-On Vercel's serverless runtime the in-process cache does not survive between invocations,
-so every load is a cold load. Run the prototype from the long-lived `npm run dev:local`
-process while it is in daily use.
+On Vercel's serverless runtime the in-process cache does not reliably survive between
+invocations, so every load may be cold. That is acceptable for the prototype, but the UI
+must prefer per-metric loading and visible progress over one monolithic all-metrics
+request.
 
 ### 2.4 Required-check set
 
@@ -157,6 +164,10 @@ which needs admin scope the prototype token may not have (D14).
 `REQUIRED_CHECK_SET_VERSION` and `required_check_count` are returned on every response.
 With nothing persisted (D8), a config change silently re-bases the whole displayed
 history — the version on the response is what makes that change noticeable at all.
+
+If no required-check config exists for the selected repo, show the Actions job names
+observed in recent push runs and ask the user to choose which jobs block merge. Do not
+pretend the public API can infer branch protection without sufficient permissions.
 
 ### 2.5 Noise band — no direction is reported unless it clears all three gates
 
@@ -176,6 +187,22 @@ Every metric computes and **displays** a coverage figure (per-metric definitions
 Below `DATA_CONFIDENCE_THRESHOLD` (default 70%) the metric renders in an "insufficient
 coverage" state with no band and no direction. A green signal computed on 40% of PRs is
 worse than no signal, because it converts missing data into false reassurance.
+
+### 2.7 Shared Limitations Note
+
+Every view includes a collapsible limitations panel at the bottom, expanded by default
+for the prototype. It lists the active assumptions and label conventions:
+
+- Production deploys are GitHub Releases. If no qualifying releases are detected for a
+  selected repo, M1/M2/M3 render a clear "no releases detected" state instead of zeros.
+- Change-failure signals look for labels or terms matching `hotfix`, `incident`,
+  `bug`, and `revert`, plus explicit Git revert commits where detectable.
+- Phase one uses live GitHub API reads only. No datastore, no webhook ingestion, and no
+  historical snapshots.
+- Direction is omitted until explicitly computed and until the sample clears the noise
+  gates.
+- Required-check metrics need a configured required-check list; public repo access alone
+  does not reveal which Actions jobs block merge.
 
 ---
 
@@ -469,10 +496,11 @@ and revert commits.
 # reuses M2's compare results — no new calls for the revert scan
 
 GET /repos/{owner}/{repo}/issues?labels=incident&state=all&since={window_start}&per_page=100
-GET /repos/{owner}/{repo}/issues?labels=sev1&state=all&since={window_start}&per_page=100
-GET /repos/{owner}/{repo}/issues?labels=outage&state=all&since={window_start}&per_page=100
+GET /repos/{owner}/{repo}/issues?labels=bug&state=all&since={window_start}&per_page=100
+# plus configured aliases if supplied later, one label per call because GitHub label
+# filters are AND semantics, not OR semantics.
    → THREE separate calls, unioned client-side. GitHub's `labels` parameter is AND,
-     not OR — `labels=incident,sev1,outage` returns only issues carrying all three,
+     not OR — `labels=incident,bug` returns only issues carrying both labels,
      which in practice is none.                                              (D10)
    → the issues endpoint also returns PRs; drop any item having a `pull_request` key
 
@@ -484,9 +512,9 @@ For each `release_windows` row, `is_failed = true` if **any** of (D5):
 ```
 1. REVERT   the NEXT release's commit list contains a commit whose message matches
             /^Revert "/ and whose reverted SHA is in THIS release's commit list
-2. INCIDENT an issue labelled incident|sev1|outage has
+2. INCIDENT an issue labelled incident|bug has
             created_at ∈ [window_start_ts, window_end_ts)
-3. HOTFIX   a PR labelled `hotfix` has its merge_commit_sha in the NEXT release's
+3. HOTFIX   a PR labelled `hotfix` or `revert` has its merge_commit_sha in the NEXT release's
             commit list
 ```
 ```
@@ -498,7 +526,7 @@ regression should be visible, not diluted by six months of clean releases.
 **Band thresholds:** elite/high ≤ 5% · medium ≤ 10% · low > 15%.
 
 **Data confidence — this is the critical one.** M3 depends on the team using
-`incident`/`sev1`/`outage` and `hotfix` labels consistently. That is a team-process
+`incident`/`bug` and `hotfix`/`revert` labels consistently. That is a team-process
 prerequisite, not an API limitation (D5, D9).
 ```
 label_coverage = releases with SOME failure signal either way
@@ -555,7 +583,7 @@ grey.
 
 *Integration:*
 7. **Label AND-semantics regression** — a fixture where issue A has only `incident` and
-   issue B has only `sev1`. A single `labels=incident,sev1,outage` call returns neither.
+   issue B has only `bug`. A single `labels=incident,bug` call returns neither.
    The three-call union must return both. This test exists specifically to stop anyone
    "optimising" the three calls back into one (D10).
 8. **PR/issue mixing** — the issues endpoint fixture includes an item with a
@@ -827,7 +855,7 @@ GET /repos/{owner}/{repo}/actions/runs?event=push&created=>={window_start_date}&
    → `created` accepts GitHub's date-range syntax: created=>=2026-06-08
 
 GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/1
-   → attempt 1 only; reruns are M7's subject, not M6's                        (D6)
+   → attempt 1 only; reruns are M7's subject, not M6's                        (M7)
 
 GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs?filter=latest&per_page=100
    → per job: name, started_at, completed_at, conclusion
@@ -954,7 +982,7 @@ Every workflow run attempt in the window, grouped by `(workflow_id, head_sha)`.
 
 GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt}
    → for each attempt 1..run_attempt: conclusion, triggering_actor, run_started_at
-   → triggering_actor distinguishes a human retry from an automatic one        (D6)
+   → triggering_actor distinguishes a human retry from an automatic one        (M7)
 
 GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs?filter=latest
    → reused from M6 for the required-check conclusion per attempt

@@ -34,26 +34,33 @@ Current implementation stance:
 - Implement hashing as base64 only for the quick prototype.
 - Replace the hash service with a proper password hashing strategy and likely a real identity provider if the prototype is approved for further development.
 
-## 2026-09-05: Event Storage
+## 2026-09-05: Persistence
 
-Decision: use SQLite as the first persistence layer for webhook event history and subscription state.
+Decision: phase one has no datastore, no ingest job, and no webhook subscription flow.
+Metrics are computed live from the GitHub REST API for the user-entered repository.
 
 Why:
 
-- It is simple to run locally and easy to inspect while the metrics dashboard is still taking shape.
-- It gives us real query semantics for dashboard metrics, filters, and rollups.
-- It is a better fit than raw file storage once GitHub webhook volume grows beyond a few test events.
+- The prototype is testing whether the metric definitions are useful before committing
+  to storage shape.
+- Every phase-one metric can be recomputed from current GitHub API state over the
+  selected lookback window.
+- Avoiding persistence keeps the first implementation smaller and makes the dashboard
+  easier to deploy on Vercel.
 
 Vercel constraint:
 
 - Vercel serverless functions do not provide durable writable local disk, so a bundled SQLite file is not a production-grade persistent store on Vercel.
-- The wrapper should therefore keep storage behind a small adapter boundary. Local development can use SQLite first; production can later swap the adapter to Turso/libSQL, Vercel Postgres, Neon, or another managed store without changing the GitHub API wrapper surface.
+- If persistence becomes necessary, add it behind an adapter and point production to
+  Turso/libSQL, Vercel Postgres, Neon, or another managed store.
 
 Current implementation stance:
 
-- The API wrapper and webhook receiver are stateless today.
-- Webhook events can be verified, summarized, and optionally forwarded through `WEBHOOK_FORWARD_URL`.
-- SQLite-backed event persistence should be added as the next dashboard step, using the same normalized webhook envelope already returned by `/api/webhooks/github`.
+- The API wrapper and dashboard endpoints remain stateless in phase one.
+- Webhook receiver code may exist as wrapper infrastructure, but webhook setup and
+  subscription management are not part of phase one.
+- Caching and memoisation are latency optimisations only. They can disappear between
+  Vercel invocations without changing the meaning of a metric.
 
 ---
 
@@ -144,8 +151,8 @@ the share of shipped commits with no associated PR as a data-quality indicator.
 
 1. The *next* release's commit range contains a commit matching `^Revert "` whose
    reverted SHA falls within *this* release's range.
-2. An issue labelled `incident`, `sev1`, or `outage` was opened during the window.
-3. A PR labelled `hotfix` was merged and its commit shipped in the *next* release.
+2. An issue labelled `incident` or `bug` was opened during the window.
+3. A PR labelled `hotfix` or `revert` was merged and its commit shipped in the *next* release.
 
 `CFR = failed releases / total releases`, over D3's release population.
 
@@ -155,8 +162,8 @@ label/pattern-based rather than relying on `deployment_status.state == failure`,
 measures "the pipeline failed to run", a different thing from "the pipeline succeeded
 but broke prod". D1's Releases-only constraint therefore does not weaken this metric.
 
-**Explicit dependency:** This requires the team to use `incident`/`sev1`/`outage` labels
-on issues and `hotfix` on PRs consistently. If they do not, CFR undercounts. **This is a
+**Explicit dependency:** This requires the team to use `incident`/`bug` labels
+on issues and `hotfix`/`revert` on PRs consistently. If they do not, CFR undercounts. **This is a
 team-process prerequisite, not an API limitation** — call it out to the team before
 trusting the number (see D9).
 
@@ -247,8 +254,8 @@ point without a gap in history.
 by whichever limit above bites first — most likely latency. The design constraint it must
 satisfy: cache `compare` on `(base_sha, head_sha)` and PR files on
 `(pr_number, merge_commit_sha)`, both permanently valid once the SHAs are historical. The
-existing SQLite-behind-an-adapter decision (Event Storage, above) stands as the shape of
-that layer when it is built.
+no-datastore phase-one decision (Persistence, above) stands; if this layer becomes
+necessary, it must remain behind a storage adapter.
 
 **Unaffected by this decision:** the prototype's build cut of two DORA metrics. Failed
 Deployment Recovery Time and Deployment Rework Rate are deferred for convention-risk
@@ -271,8 +278,8 @@ ticks, making an unlabelled quarter visually obvious.
 
 ## D10: GitHub's `labels` query parameter is AND, not OR
 
-**Decision:** Fetch incident issues with **three separate calls** —
-`labels=incident`, `labels=sev1`, `labels=outage` — unioned client-side.
+**Decision:** Fetch failure-labelled issues with **separate calls** —
+`labels=incident`, `labels=bug`, and any later configured aliases — unioned client-side.
 
 **Rationale:** `GET /issues?labels=a,b,c` returns only issues carrying **all three**
 labels, which in practice is none. The single-call form written in the original
