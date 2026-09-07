@@ -237,6 +237,7 @@ async function associatePullsToReleaseWindows({
       head_sha: pull.head?.sha || null,
       release_id: timeMatch.release_id,
       release_tag: timeMatch.tag_name,
+      release_html_url: timeMatch.html_url || null,
       release_published_at: timeMatch.window_end_ts,
       match_method: shaMatch ? "sha" : "time_window",
       lead_time_hours: round((releasedAt - mergedAt) / HOURS),

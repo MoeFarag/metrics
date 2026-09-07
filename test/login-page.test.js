@@ -109,3 +109,16 @@ test("metric charts expose hover and tap tooltips", () => {
   assert.match(html, /closest\?\.\("\.chart-point, \.chart-bar"\)/);
   assert.match(html, /function tooltipPosition/);
 });
+
+test("manager cards expose source evidence links", () => {
+  const html = renderLoginPage();
+
+  assert.match(html, /<h4>Evidence<\/h4>/);
+  assert.match(html, /metricEvidence\(metric\)/);
+  assert.match(html, /target="_blank" rel="noopener noreferrer"/);
+  assert.match(html, /function buildMetricEvidence/);
+  assert.match(html, /function normalizeEvidenceRow/);
+  assert.match(html, /release_html_url/);
+  assert.match(html, /time_to_green_seconds/);
+  assert.match(html, /first_attempt_passed/);
+});

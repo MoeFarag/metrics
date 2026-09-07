@@ -126,6 +126,7 @@ function computeTimeToSignal(actionsData, { window, config = {} } = {}) {
     measured_sample_size: included.length,
     data_confidence: confidence,
     caveats: caveatsFor(required, confidence),
+    evidence_rows: timeToSignalEvidence(included),
     rateLimit: actionsData.meta?.rateLimit || null,
   };
 }
@@ -165,6 +166,7 @@ function computeCiReliability(actionsData, { window, config = {} } = {}) {
     sha_sample_size: shaValues.length,
     data_confidence: confidence,
     caveats: caveatsFor(required, confidence),
+    evidence_rows: ciReliabilityEvidence(shaValues),
     rateLimit: actionsData.meta?.rateLimit || null,
   };
 }
@@ -216,6 +218,7 @@ function buildCiSignals(runs, jobsByRunId, required) {
 
     return {
       run_id: run.id,
+      run_html_url: run.html_url,
       workflow_id: run.workflow_id,
       workflow_name: run.workflow_name,
       head_sha: run.head_sha,
@@ -230,6 +233,11 @@ function buildCiSignals(runs, jobsByRunId, required) {
       required_jobs_found: requiredJobs.length,
       all_required_jobs_found: allRequiredPresent,
       outcome,
+      jobs: requiredJobs.map((job) => ({
+        name: job.name,
+        conclusion: job.conclusion,
+        html_url: job.html_url || null,
+      })),
     };
   });
 }
@@ -339,6 +347,8 @@ function ensureGroup(groups, key, run) {
       key,
       workflow_id: run.workflow_id,
       head_sha: run.head_sha,
+      run_html_url: run.html_url || null,
+      workflow_name: run.workflow_name || null,
       firstCreatedAt: run.created_at,
       maxAttempt: 0,
       rerunKinds: [],
@@ -350,6 +360,49 @@ function ensureGroup(groups, key, run) {
     });
   }
   return groups.get(key);
+}
+
+function timeToSignalEvidence(signals, limit = 10) {
+  return [...signals]
+    .sort((a, b) => {
+      const aValue = Math.max(Number(a.time_to_green_seconds) || 0, Number(a.time_to_red_seconds) || 0);
+      const bValue = Math.max(Number(b.time_to_green_seconds) || 0, Number(b.time_to_red_seconds) || 0);
+      return bValue - aValue;
+    })
+    .slice(0, limit)
+    .map((signal) => ({
+      run_id: signal.run_id,
+      workflow_name: signal.workflow_name,
+      head_branch: signal.head_branch,
+      head_sha: signal.head_sha,
+      html_url: signal.run_html_url || null,
+      outcome: signal.outcome,
+      queue_seconds: signal.queue_seconds,
+      time_to_red_seconds: signal.time_to_red_seconds,
+      time_to_green_seconds: signal.time_to_green_seconds,
+      jobs: signal.jobs,
+    }));
+}
+
+function ciReliabilityEvidence(groups, limit = 10) {
+  return [...groups]
+    .sort((a, b) => {
+      if (b.maxAttempt !== a.maxAttempt) return b.maxAttempt - a.maxAttempt;
+      return Date.parse(b.firstCreatedAt || 0) - Date.parse(a.firstCreatedAt || 0);
+    })
+    .slice(0, limit)
+    .map((group) => ({
+      workflow_id: group.workflow_id,
+      workflow_name: group.workflow_name,
+      head_sha: group.head_sha,
+      html_url: group.run_html_url || null,
+      first_created_at: group.firstCreatedAt,
+      max_attempt: group.maxAttempt,
+      first_attempt_passed: group.firstAttemptPassed,
+      first_attempt_failed: group.firstAttemptFailed,
+      later_attempt_passed: group.laterAttemptPassed,
+      failed_checks: [...group.failedChecks.keys()],
+    }));
 }
 
 function addAttemptToGroup(group, attempt, required) {
@@ -494,6 +547,7 @@ function extractJobs(data) {
 function normalizeRun(run) {
   return {
     id: run.id,
+    html_url: run.html_url || null,
     workflow_id: run.workflow_id,
     workflow_name: run.name || run.workflow_name,
     head_sha: run.head_sha,
@@ -530,6 +584,7 @@ function normalizeJob(job, runId) {
     started_at: job.started_at,
     completed_at: job.completed_at,
     conclusion: job.conclusion,
+    html_url: job.html_url || null,
   };
 }
 

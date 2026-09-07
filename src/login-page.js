@@ -298,6 +298,7 @@ function renderLoginPage() {
       }
 
       .metric-card {
+        min-width: 0;
         min-height: 220px;
         display: grid;
         grid-template-rows: auto 1fr auto;
@@ -358,6 +359,11 @@ function renderLoginPage() {
         display: flex;
         align-items: center;
         gap: 8px;
+        min-width: 0;
+      }
+
+      .metric-title-row h3 {
+        overflow-wrap: anywhere;
       }
 
       .metric-ref {
@@ -551,6 +557,44 @@ function renderLoginPage() {
         gap: 8px;
         font-size: 13px;
         color: #475467;
+        min-width: 0;
+      }
+
+      .evidence-list {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+        border-top: 1px solid #e6ebf2;
+        padding-top: 10px;
+      }
+
+      .evidence-list h4 {
+        margin: 0;
+        color: #303747;
+        font-size: 13px;
+        line-height: 1.25;
+      }
+
+      .evidence-list ul {
+        display: grid;
+        gap: 6px;
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .evidence-list li {
+        min-width: 0;
+      }
+
+      .evidence-list a {
+        color: #23624f;
+        font-weight: 750;
+        overflow-wrap: anywhere;
+      }
+
+      .evidence-meta {
+        color: #667085;
+      }
       }
 
       .details-button {
@@ -824,6 +868,16 @@ function renderLoginPage() {
                 </div>
                 <span>Sample: {{ metric.sample_size ?? 0 }}</span>
                 <span>{{ metric.detail || 'Evidence rows appear here as each metric engine lands.' }}</span>
+                <div v-if="metricEvidence(metric).length" class="evidence-list">
+                  <h4>Evidence</h4>
+                  <ul>
+                    <li v-for="item in metricEvidence(metric)" :key="item.key">
+                      <a v-if="item.href" :href="item.href" target="_blank" rel="noopener noreferrer">{{ item.label }}</a>
+                      <span v-else>{{ item.label }}</span>
+                      <span v-if="item.meta" class="evidence-meta"> - {{ item.meta }}</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
               <div v-else class="executive-report">
                 <div>
@@ -1190,6 +1244,9 @@ function renderLoginPage() {
           metricReport(metric) {
             return metricPlan(metric);
           },
+          metricEvidence(metric) {
+            return buildMetricEvidence(metric);
+          },
           showChartTooltip(event, lock) {
             const text = chartTooltipText(event.target);
             if (!text) {
@@ -1298,6 +1355,132 @@ function renderLoginPage() {
           calculation: "Calculation method pending.",
           meaning: "Interpretation guidance pending."
         };
+      }
+
+      function buildMetricEvidence(metric) {
+        const rows = evidenceSourceRows(metric);
+        return rows.map((row, index) => normalizeEvidenceRow(metric, row, index)).filter(Boolean).slice(0, 6);
+      }
+
+      function evidenceSourceRows(metric) {
+        if (Array.isArray(metric.evidence_rows) && metric.evidence_rows.length) {
+          return metric.evidence_rows;
+        }
+        if (metric.id === "m1" && Array.isArray(metric.releases)) {
+          return metric.releases;
+        }
+        if (metric.id === "m3" && Array.isArray(metric.releases)) {
+          return metric.releases.filter((release) => release.failed || release.signals?.length);
+        }
+        return [];
+      }
+
+      function normalizeEvidenceRow(metric, row, index) {
+        if (!row || typeof row !== "object") {
+          return null;
+        }
+
+        const href = row.html_url || row.release_html_url || null;
+        const key = metric.id + "-" + (row.pr_number || row.release_id || row.run_id || row.head_sha || index);
+        if (metric.id === "m1") {
+          return {
+            key,
+            href,
+            label: row.tag_name || row.title || "Release " + (index + 1),
+            meta: compactParts([formatDate(row.published_at), shortSha(row.resolved_sha)]).join(" · "),
+          };
+        }
+        if (metric.id === "m2") {
+          return {
+            key,
+            href,
+            label: prLabel(row),
+            meta: compactParts([
+              formatMetricNumber(row.lead_time_hours, "hours") + " lead time",
+              row.release_tag ? "release " + row.release_tag : "",
+              row.release_html_url ? "release link captured" : "",
+            ]).join(" · "),
+          };
+        }
+        if (metric.id === "m3") {
+          return {
+            key,
+            href,
+            label: row.tag_name || row.title || "Release " + (index + 1),
+            meta: compactParts([
+              row.failed ? "failure signal" : "",
+              Array.isArray(row.signals) ? row.signals.map((signal) => displayLabel(signal.source)).join(", ") : "",
+            ]).join(" · "),
+          };
+        }
+        if (metric.id === "m4") {
+          return {
+            key,
+            href,
+            label: prLabel(row),
+            meta: compactParts([
+              formatMetricNumber(row.changed_lines_filtered, "lines") + " filtered",
+              formatMetricNumber(row.changed_lines_raw, "lines") + " raw",
+              row.files_changed_filtered !== undefined ? row.files_changed_filtered + " files" : "",
+            ]).join(" · "),
+          };
+        }
+        if (metric.id === "m5") {
+          return {
+            key,
+            href,
+            label: prLabel(row),
+            meta: compactParts([
+              row.review_round_trips + " round trips",
+              row.reviewer_feedback_batches !== undefined ? row.reviewer_feedback_batches + " feedback batches" : "",
+              row.changed_lines_filtered !== undefined ? formatMetricNumber(row.changed_lines_filtered, "lines") : "",
+            ]).join(" · "),
+          };
+        }
+        if (metric.id === "m6") {
+          return {
+            key,
+            href,
+            label: row.workflow_name || "Actions run " + (row.run_id || index + 1),
+            meta: compactParts([
+              displayLabel(row.outcome),
+              row.time_to_red_seconds !== null && row.time_to_red_seconds !== undefined ? "red " + formatMetricNumber(row.time_to_red_seconds, "seconds") : "",
+              row.time_to_green_seconds !== null && row.time_to_green_seconds !== undefined ? "green " + formatMetricNumber(row.time_to_green_seconds, "seconds") : "",
+              row.queue_seconds !== null && row.queue_seconds !== undefined ? "queue " + formatMetricNumber(row.queue_seconds, "seconds") : "",
+            ]).join(" · "),
+          };
+        }
+        if (metric.id === "m7") {
+          return {
+            key,
+            href,
+            label: row.workflow_name || shortSha(row.head_sha) || "CI attempt group " + (index + 1),
+            meta: compactParts([
+              row.max_attempt ? row.max_attempt + " attempts" : "",
+              row.first_attempt_passed ? "first pass" : "",
+              row.later_attempt_passed ? "later pass" : "",
+              Array.isArray(row.failed_checks) && row.failed_checks.length ? "failed: " + row.failed_checks.slice(0, 2).join(", ") : "",
+            ]).join(" · "),
+          };
+        }
+        return null;
+      }
+
+      function prLabel(row) {
+        const prefix = row.pr_number ? "#" + row.pr_number + " " : "";
+        return prefix + (row.title || "Pull request");
+      }
+
+      function compactParts(parts) {
+        return parts.map((part) => String(part || "").trim()).filter(Boolean);
+      }
+
+      function shortSha(value) {
+        return value ? String(value).slice(0, 7) : "";
+      }
+
+      function formatDate(value) {
+        return value ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(value)) : "";
       }
 
       function chartTooltipText(target) {
