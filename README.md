@@ -131,24 +131,6 @@ Metrics also degrade honestly rather than silently. No qualifying releases rende
 no-release state instead of zeros, change failure rate is never shown without its label
 coverage beside it (D9), and a metric below the confidence threshold suppresses itself.
 
-## The One Thing I'd Change Next
-
-**Replace on-the-fly computation with a persisted event and metric store, behind a storage
-adapter.** Everything else on the limitations list is a definitional argument that more
-code cannot settle; this one is mechanical, and it decides whether a second team can use
-the tool at all.
-
-In shipping order:
-
-1. **Cache the two expensive calls on immutable keys** — `compare` on
-   `(base_sha, head_sha)`, PR files on `(pr_number, merge_commit_sha)`. Both are
-   permanently valid once historical, so they never need invalidation.
-2. **Bound the pull-request walk** so it stops once the `updated` cursor passes the window
-   start, instead of reading the entire closed-PR history on every load.
-3. **Persist metric rows with provenance** — the ruleset and `REQUIRED_CHECK_SET_VERSION`
-   in force at computation time — so a config change stops silently re-basing history (D14).
-4. **Recompute incrementally**, refreshing only buckets touched since the last run.
-
 ## Views
 
 Two views, mapped onto the prototype roles (D15):
@@ -207,29 +189,6 @@ GitHub source connector:
 - `POST /api/github/hooks`
 - `DELETE /api/github/hooks/:hook_id`
 - `POST /api/webhooks/github`
-
-### Create A Webhook
-
-```bash
-curl -X POST "$BASE_URL/api/github/hooks" \
-  -H "content-type: application/json" \
-  -H "authorization: Bearer $WRAPPER_API_TOKEN" \
-  -d '{
-    "url": "https://your-vercel-app.vercel.app/api/webhooks/github",
-    "events": ["push", "pull_request", "workflow_run"],
-    "active": true
-  }'
-```
-
-GitHub requires an authenticated token with permission to manage hooks for the repository. Only laying down the foundations.
-
-### Webhook Receiver
-
-Point GitHub at `https://your-vercel-app.vercel.app/api/webhooks/github`. When
-`GITHUB_WEBHOOK_SECRET` is set, the receiver validates `X-Hub-Signature-256`; verified
-events are normalized and returned, and forwarded raw if `WEBHOOK_FORWARD_URL` is set.
-Again: nothing here feeds a metric yet.
-
 
 ## Why This Won't Scale
 
