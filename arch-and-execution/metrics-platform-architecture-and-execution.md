@@ -99,10 +99,7 @@ without them.
 individual metric with extra steps, and "we never show individual grain" is no defence when
 everyone knows who wrote the big PRs. **So comparison is across services, never squads.**
 *"Checkout has a 90th-percentile lead time of nine days"* describes a system; the squad-shaped
-version describes four named people. A squad always sees itself — self-view and
-comparative-view are different rights, not filters. Cross-squad framing degrades deliberately
-to a bottleneck narrative rather than a table. Some managers will want the table: the table is
-a leaderboard, the narrative is a diagnosis.
+version describes four named people. A squad always sees itself through owned services— self-view and comparative-view are different rights, not filters. 
 
 Four mechanisms enforce this, one per stage. **Pseudonymisation at ingestion** — identity
 becomes a salted hash inside the connector, and the identity map lives where the metric path
@@ -110,9 +107,8 @@ cannot join to it, so a database compromise yields no per-person table because o
 assembled. **Individual grain is not computed** — absent, not hidden; hidden is one toggle from
 a leaderboard, and every engineer correctly assumes it exists. **Evidence is scoped and
 audited** — own-squad by default, cross-squad by explicit grant, every access logged, since a
-PR list is attributable however clean the aggregates are. And **the executive view cannot reach
-evidence at all**, structurally rather than by permission: a permission can be granted in a
-hurry before a board meeting; a missing code path cannot.
+PR list is attributable however clean the aggregates are. And **the executive view doesn't include evidence by default**, structurally rather than by permission: a permission can be granted in a
+hurry before a board meeting; a missing code path cannot this avoids biased viewpoints.
 
 Authentication is **organisational SSO via OIDC** (D18): IdP group claims supply both the
 audience model and squad membership, so access rules need no separate roster to drift. The
@@ -141,7 +137,7 @@ branch keeps the same day-90 number.
 
 ### Days 6–30 — one squad, end to end
 
-Ingestion → transformation → Manager view for a single repo, four cheapest metrics. Ship to
+Ingestion → transformation → Manager view for a single squad including all services, four cheapest metrics. Ship to
 **one** squad and sit with them. The goal is not coverage; it is finding out whether the
 numbers survive contact with the people they describe. That is the only way data-quality
 problems surface, and they must surface while still cheap.
@@ -155,28 +151,22 @@ after. Expand to ~4 squads, add CI metrics.
 
 Then **a second and third source: deployment events and the work tracker.** The
 highest-leverage integration in the plan, because deployment events carry a *status* that
-releases structurally cannot — repairing change failure rate, unblocking recovery time, and
+releases (as used in Part 1) structurally cannot — repairing change failure rate, unblocking recovery time, and
 closing the untagged-redeploy blind spot at once. It also supplies the evidence to design the
 canonical model from more than one example, which is how you avoid an abstraction shaped like
 its first source.
 
 ### Days 61–90 — leadership, and proof of generality
 
-Executive view, bands, noise gates, confidence gating, all 8 squads. Plus the falsification
-test: **one non-engineering metric on the same engine, loaded manually from a spreadsheet.**
-Manual is the point — it tests the model, not the integration. If the four nouns cannot
-express it without an engine change, we learn that in week 10 rather than year two.
+Executive view, bands, noise gates, confidence gating, all 8 squads. 
+
+Adding new non-technical domains - whether user related, employee related or other functions as needed
 
 ### Deliberately not built in 90 days
 
 Incident-tool integration · surveys beyond the single trust question · architecture metrics
 (fan-in, criticality, blast radius) · AI-assist and authorship attribution · forecasting ·
-alerting · self-serve metric authoring · multi-tenancy · mobile. And **no third view tier** —
-two views is settled (D15).
-
-Feasibility rests on the spike: adopting CloudEvents, the Airbyte contract and an existing
-semantic layer removes the three largest build items before day 6, leaving the part nobody has
-built — a solo-builder-sized problem.
+alerting · self-serve metric authoring · multi-tenancy · mobile. All can come later once the framework is set and proven functional
 
 ### The day-90 number
 
@@ -200,7 +190,7 @@ should be acted on.
 
 ## 4. What I Would Change at 10x
 
-At ~300 engineers and ~80 squads I would reverse **D8** — the prototype computes every metric
+At ~300 engineers and ~80 squads, the scale is different and full fledged framework is needed — the prototype computes every metric
 live, inside a single synchronous request.
 
 The flaw is not the missing database. It is that **all three stages collapse into one
