@@ -12,6 +12,35 @@ Design rationale for every choice below lives in [`docs/decisions.md`](docs/deci
 architecture and roadmap live in [`arch-and-execution/`](arch-and-execution/) and
 [`docs/future-plan.md`](docs/future-plan.md).
 
+## Currently Deployed Version
+
+Live prototype: **<https://metrics-prototype.vercel.app>**
+
+Sign in with any of the three prototype accounts. The account you choose selects the view
+(D15) — see [Views](#views) for what each one shows.
+
+| Username | Password | Lands on |
+| --- | --- | --- |
+| `admin` | `admin` | Manager view, with tabs to switch to the Executive view |
+| `manager` | `manager` | Manager view — distributions, evidence rows, sample sizes |
+| `executive` | `executive` | Executive view — headline, band, and caveats |
+
+These are throwaway prototype credentials with base64-encoded hashes, deliberately public
+so the deployment can be handed to a reviewer. They are not an access-control mechanism;
+a real deployment replaces this gate with organisational SSO (D18).
+
+> [!NOTE]
+> The prototype ships pointed at an **arbitrary public repository**
+> ([`advaitpaliwal/feynman`](https://github.com/advaitpaliwal/feynman)) purely so the
+> dashboard has something to render on first load. There is nothing special about it and
+> no data is bound to it. Type any public repository into the search box at the top —
+> `owner/repo` or a full GitHub URL — and press **Run** to compute all seven metrics
+> against that repository instead. **Default** returns to the shipped repo.
+>
+> Larger and older repositories take noticeably longer on first load, and can exhaust the
+> hourly GitHub API budget; [Why The On-The-Fly Implementation Won't Scale](#why-the-on-the-fly-implementation-wont-scale)
+> explains exactly why.
+
 ## Setup
 
 Requirements: Node.js 18 or newer. The prototype has **no runtime or dev dependencies**,
@@ -129,42 +158,145 @@ qualifying releases renders a no-release state instead of zeros, change failure 
 never shown without its label-coverage figure beside it (D9), and a metric whose data
 confidence falls below threshold suppresses itself.
 
-## Known Limitation I'd Fix Next
+## The One Thing I'd Change Next
 
-**There is no persistence, and the live-computation model is at its ceiling.**
+**Replace on-the-fly computation with a persisted event and metric store, behind a storage
+adapter.**
 
-A cold full refresh over a 60-day window runs roughly **750–900 GitHub API calls** —
-dominated by the per-run jobs calls behind M6/M7 and the three per-PR calls behind M4/M5 —
-and requesting prior-window direction, which the dashboard does by default, roughly doubles
-that. Against the authenticated budget of 5,000 requests/hour that is about **four cold
-refreshes per hour**: workable for the one or two people this prototype was built for, and
-a hard wall for a team. In-process memoisation and bounded concurrency soften a single load
-but vanish between serverless invocations.
+Everything else on the limitations list is a definitional argument that more code cannot
+settle. This one is purely mechanical, it is the constraint that decides whether a second
+team can use the tool at all, and it gets harder to retrofit the longer the metric surface
+grows against a live-read assumption.
 
-The second cost is reproducibility. Because release SHAs are re-resolved on every load
-rather than snapshotted, a force-moved tag or deleted branch can change a historical number
-between two loads (D2); and with no stored rows there is nowhere to record which exclusion
-ruleset or required-check set a past number was computed under, so a config change silently
-re-bases the whole displayed history (D14).
+The change, in the order I'd ship it:
 
-**The fix, in order.** Add a storage adapter and cache the two expensive calls on keys that
-are permanently valid once historical: `compare` on `(base_sha, head_sha)`, and PR files on
-`(pr_number, merge_commit_sha)`. That alone removes most of the call volume. Then persist
-computed metric rows with provenance columns for the ruleset and required-check-set version
-in force at computation time. On Vercel this points at a managed store — Turso/libSQL,
-Vercel Postgres, or Neon — never a bundled SQLite file, since serverless functions have no
-durable local disk.
+1. **Cache the two expensive calls on immutable keys.** `compare` keyed on
+   `(base_sha, head_sha)` and PR files keyed on `(pr_number, merge_commit_sha)` are both
+   permanently valid once the SHAs are historical — they can never need invalidation. This
+   is the cheapest step and removes the largest share of repeat call volume.
+2. **Bound the pull-request walk.** Page `/pulls` only until the `updated` cursor passes
+   the window start, instead of walking the repository's entire closed-PR history on every
+   load (see the next section).
+3. **Persist computed metric rows with provenance** — the exclusion ruleset and
+   `REQUIRED_CHECK_SET_VERSION` in force at computation time — so a config change stops
+   silently re-basing the displayed history (D14), and a force-moved tag stops changing a
+   historical number between two loads (D2).
+4. **Recompute incrementally**, refreshing only buckets touched since the last run rather
+   than rebuilding the full window each load.
 
-Deferring it costs nothing retroactively: every metric is a pure function of the
-repository's current API state over a window, and all of that state is retrievable
-retrospectively. Nothing is permanently lost by not recording it today, so adding the store
-later is a pure performance and reproducibility change with no gap in history (D8).
+On Vercel this points at a managed store — Turso/libSQL, Vercel Postgres, or Neon — never a
+bundled SQLite file, since serverless functions have no durable local disk.
 
-Other known limitations, each with a decision entry rather than an open question:
-change-failure detection depends on labelling discipline (D5, D9); lead time still anchors
-on PR open rather than first commit until the ticket-branch convention lands (D17); Time to
-Signal's push timestamp is the run's `created_at`, so pre-queue delay is invisible (D7); and
-the configured required-check set can drift from actual branch protection (D14).
+**Why it was correct to defer it, and why deferring costs nothing retroactively.** Every
+one of the seven metrics is a pure function of the repository's current API state over a
+lookback window; none depends on an event having been captured at the moment it occurred.
+Releases, PRs, reviews, PR commits, PR files, issues, runs, jobs, and attempts are all
+retrievable retrospectively. There is no "cannot be backfilled" hazard, so adding the store
+later is a pure performance and reproducibility change with no gap in history. Building it
+first would have meant committing to a schema before knowing whether these metric
+definitions were worth keeping. Full reasoning in `docs/decisions.md` (D8).
+
+## Why The On-The-Fly Implementation Won't Scale
+
+Each dashboard load recomputes all seven metrics from the GitHub API from scratch. The
+documented cost is roughly **750–900 calls for a cold 60-day refresh** (D8), against an
+authenticated budget of 5,000 requests/hour — about four refreshes an hour. That figure is
+the optimistic case. Five properties of the current implementation make it degrade faster
+than a per-load average suggests.
+
+### 1. The pull-request walk is unbounded by the window
+
+`loadMergedPullRequests` (`src/metrics/pr-loader.js`) calls `requestAllPages` on `/pulls`
+with `state=closed`, then filters to the window **in memory**. `requestAllPages`
+(`src/github-wrapper.js`) follows every `next` link with no page cap and no early
+termination, one page at a time.
+
+The GitHub pulls API has no date filter, so client-side filtering is the right call — but
+the results are already sorted `updated desc`, and the walk does not stop when the cursor
+passes the window start. It reads the repository's **entire closed-PR history** on every
+load, at 100 per page, sequentially.
+
+The consequence is that the dominant cost term scales with **repository age, not window
+size**. A 60-day window on a repo with 4,000 closed PRs costs ~40 sequential round trips
+before a single metric is computed; the same window on a 40,000-PR repo costs ~400. The
+repository prefilled in `.env.example` is `vercel/next.js`, which is firmly in the second
+category. Narrowing the window to 7 days does not reduce this at all.
+
+### 2. Fan-out is multiplicative, and one metric's fan-out grows with the problem it measures
+
+Per merged PR in the window, `loadPullRequestDetails` issues **three** calls — files,
+reviews, commits — and each is itself a full `requestAllPages`, so a 400-file PR is four
+pages on its own.
+
+The Actions path is worse in an instructive way. `loadActionsWindow`
+(`src/metrics/actions.js`) issues **two calls per run attempt** — the attempt and its jobs
+— and iterates attempts sequentially per run. A run that was rerun three times costs six
+calls instead of two. M7 exists to measure rerun rate, so **the metric gets more expensive
+in exactly the repositories where its number is worst**. A CI reliability problem shows up
+first as a rate-limit failure in the tool meant to diagnose it.
+
+To its credit the runs list does filter server-side (`created: >=window_start`), so this
+term is genuinely window-bounded — unlike the PR walk above.
+
+### 3. The cache cannot survive a request
+
+`MemoCache` is constructed inside the request handler (`api/metrics/[...path].js`), so it
+is destroyed when the response is sent. The PR-resource keys are already written in the
+correct immutable form — `pull:{number}:{merge_commit_sha}:{kind}`, stored with
+`ttl = Infinity` — and that TTL is meaningless in practice, because nothing is left alive
+to read it. Two consecutive loads of the same repository share **zero** work.
+
+This is the single largest gap between the current behaviour and the intended one. The keys
+are right; only the lifetime is wrong. Step 1 above is mostly a matter of pointing existing
+keys at a store that outlives the invocation.
+
+### 4. Concurrency is the wrong axis, and the budget is shared
+
+`promisePool` bounds item fan-out at `METRICS_CONCURRENCY` (default 8), which controls
+burst rate but not total calls. Pagination inside each call is still strictly sequential —
+a `do/while` awaiting each page — so latency on a wide window is dominated by serial round
+trips that concurrency never touches. Raising the limit only reaches the rate limit sooner.
+
+More fundamentally, the 5,000/hour budget belongs to the **token**, not the user. Ten
+people on one dashboard share one bucket, so per-user cost is not amortised — it is
+additive against a fixed ceiling. The tool gets less reliable precisely as adoption grows,
+which is the opposite of the property you want in something teams are meant to trust.
+
+### 5. Two multipliers stack on top of all of it
+
+The dashboard sets `include_prior_window=true` on every load, which computes the prior
+60 days for direction and **roughly doubles** the call count — and it is on by default, not
+opt-in. Separately, `vercel.json` sets no `maxDuration`, so a cold refresh doing hundreds
+of largely sequential round trips runs against the platform's default function timeout. On
+a large repository the wall is likely to be the timeout rather than the rate limit, which
+surfaces as an opaque function error rather than a legible "rate limited" state.
+
+### Where it breaks, in order
+
+| Scale | What happens |
+| --- | --- |
+| 1–2 people, small repo | Works as intended. This is the tested case. |
+| 1 person, large repo (`vercel/next.js`) | The unbounded PR walk alone risks exhausting the function timeout before metrics compute. |
+| A team on one shared token | ~4 cold refreshes/hour across *all* users; the fourth person to open the dashboard gets rate-limited. |
+| Multiple repos or an org rollup | Not viable. Cost is linear in repositories with no shared work, and D15's Executive view wants org trend — the view the roadmap points at is the one this model cannot serve. |
+
+The honest summary: live computation was the right call for validating whether these seven
+definitions are worth keeping, and it is load-bearing for nothing beyond that. It stops
+being adequate at the exact moment the prototype succeeds — a second team, a second
+repository, or an executive asking for a trend across both.
+
+## Other Known Limitations
+
+Each of these has a decision entry rather than an open question:
+
+- Change-failure detection depends on labelling discipline, which is why label coverage is
+  rendered at equal weight beside the number (D5, D9).
+- Lead time still anchors on PR open rather than first commit, until the ticket-branch
+  convention lands (D17).
+- Time to Signal's push timestamp is the workflow run's `created_at`, so any delay between
+  `git push` and GitHub queueing the run is invisible (D7).
+- The configured required-check set can drift from actual branch protection; if the names
+  match no jobs, confidence drops to 0 and the metric suppresses itself (D14).
 
 ## Views
 
